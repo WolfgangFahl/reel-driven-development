@@ -1,0 +1,15 @@
+#!/bin/bash
+# WF 2024-01-10
+package=rdd
+
+# Sort imports
+isort tests/*.py
+isort $package/*.py
+
+# Format code
+black tests/*.py
+black $package/*.py
+
+# Format docstrings
+docformatter --in-place tests/*.py
+docformatter --in-place $package/*.py

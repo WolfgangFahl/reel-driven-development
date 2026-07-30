@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "reel-driven-development"
+description = "Reel Driven Development - turn recorded user walks into domain stories and outcome objects"
+authors = [
+  { name = "Wolfgang Fahl", email = "wf@bitplan.com" }
+]
+maintainers = [
+  { name = "Wolfgang Fahl", email = "wf@bitplan.com" }
+]
+readme = "README.md"
+license = "Apache-2.0"
+
+dependencies = [
+  # https://pypi.org/project/pybasemkit/
+  "pybasemkit>=0.2.2",
+]
+requires-python = ">=3.10"
+
+classifiers = [
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13"
+]
+
+dynamic = ["version"]
+
+[project.urls]
+Home = "https://github.com/WolfgangFahl/reel-driven-development"
+Documentation = "https://wiki.bitplan.com/index.php/Reel_Driven_Development"
+Source = "https://github.com/WolfgangFahl/reel-driven-development"
+
+[tool.hatch.version]
+path = "rdd/__init__.py"
+
+[project.optional-dependencies]
+test = []
+
+[tool.hatch.build.targets.wheel]
+only-include = ["rdd"]
+
+[tool.hatch.build.targets.wheel.sources]
+"rdd" = "rdd"
