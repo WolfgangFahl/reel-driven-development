@@ -1,0 +1,105 @@
+{
+  "video": "~/.rdd/cache/gVxk-zRb0wQ.mp4",
+  "start": 1200.0,
+  "end": 1260.0,
+  "frames_sampled": 786,
+  "hops": [
+    {
+      "pos": 1,
+      "time": "20:02",
+      "node": "hop01",
+      "url": null,
+      "summary": "32 change(s) [1200.06s,1202.84s], max score 50.8, settled at 1202.84s",
+      "screenshot": "hop01.jpg"
+    },
+    {
+      "pos": 2,
+      "time": "20:06",
+      "node": "hop02",
+      "url": null,
+      "summary": "11 change(s) [1205.42s,1206.83s], max score 49.8, settled at 1206.83s",
+      "screenshot": "hop02.jpg"
+    },
+    {
+      "pos": 3,
+      "time": "20:10",
+      "node": "hop03",
+      "url": null,
+      "summary": "24 change(s) [1209.05s,1210.99s], max score 65.5, settled at 1210.99s",
+      "screenshot": "hop03.jpg"
+    },
+    {
+      "pos": 4,
+      "time": "20:20",
+      "node": "hop04",
+      "url": null,
+      "summary": "94 change(s) [1212.60s,1220.45s], max score 245.4, settled at 1220.45s",
+      "screenshot": "hop04.jpg"
+    },
+    {
+      "pos": 5,
+      "time": "20:28",
+      "node": "hop05",
+      "url": null,
+      "summary": "57 change(s) [1221.86s,1228.62s], max score 240.8, settled at 1228.62s",
+      "screenshot": "hop05.jpg"
+    },
+    {
+      "pos": 6,
+      "time": "20:34",
+      "node": "hop06",
+      "url": null,
+      "summary": "40 change(s) [1229.74s,1234.13s], max score 130.5, settled at 1234.13s",
+      "screenshot": "hop06.jpg"
+    },
+    {
+      "pos": 7,
+      "time": "20:37",
+      "node": "hop07",
+      "url": null,
+      "summary": "2 change(s) [1237.73s,1237.82s], max score 76.8, settled at 1237.82s",
+      "screenshot": "hop07.jpg"
+    },
+    {
+      "pos": 8,
+      "time": "20:41",
+      "node": "hop08",
+      "url": null,
+      "summary": "20 change(s) [1239.11s,1241.02s], max score 30.2, settled at 1241.02s",
+      "screenshot": "hop08.jpg"
+    },
+    {
+      "pos": 9,
+      "time": "20:45",
+      "node": "hop09",
+      "url": null,
+      "summary": "2 change(s) [1245.50s,1245.59s], max score 53.5, settled at 1245.59s",
+      "screenshot": "hop09.jpg"
+    },
+    {
+      "pos": 10,
+      "time": "20:47",
+      "node": "hop10",
+      "url": null,
+      "summary": "2 change(s) [1247.58s,1247.67s], max score 243.3, settled at 1247.67s",
+      "screenshot": "hop10.jpg"
+    },
+    {
+      "pos": 11,
+      "time": "20:50",
+      "node": "hop11",
+      "url": null,
+      "summary": "3 change(s) [1249.75s,1250.24s], max score 240.5, settled at 1250.24s",
+      "screenshot": "hop11.jpg"
+    },
+    {
+      "pos": 12,
+      "time": "20:59",
+      "node": "hop12",
+      "url": null,
+      "summary": "73 change(s) [1252.59s,1259.85s], max score 158.0, settled at 1259.85s",
+      "screenshot": "hop12.jpg"
+    }
+  ],
+  "absences": []
+}
