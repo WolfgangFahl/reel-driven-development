@@ -29,3 +29,40 @@ walks through a system while talking. RDD treats the reel as a graph walk:
 
 The first tooling milestone is HopDetection - see
 [issue #1](https://github.com/WolfgangFahl/reel-driven-development/issues/1).
+
+## Example: GenWiki walk
+
+Acceptance run on the [test video](https://www.youtube.com/watch?v=gVxk-zRb0wQ)
+segment 20:00-21:00 - a walk through wiki.genealogy.net category pages:
+
+```bash
+hopdetect ~/.rdd/cache/gVxk-zRb0wQ.mp4 --start 20:00 --end 21:00 --out hops
+12 hops from 786 sampled frames -> hops/hops.json
+```
+
+Raw results in [examples/genwiki-walk](examples/genwiki-walk). Of the 12
+detected hops, 9 are distinct content states of the walk (hop numbers kept as
+in hops.json):
+
+| hop | time | changes grouped | content | frame |
+| --- | --- | --- | --- | --- |
+| hop01 | 20:02 | 32 | Kategorie:PDF | <img src="examples/genwiki-walk/hop01.jpg" width="360"> |
+| hop02 | 20:06 | 11 | Kategorie:PDF, media section | <img src="examples/genwiki-walk/hop02.jpg" width="360"> |
+| hop03 | 20:10 | 24 | file page with PDF viewer (Todfall-Rodel Kloster Salem) | <img src="examples/genwiki-walk/hop03.jpg" width="360"> |
+| hop04 | 20:20 | 94 | presentation slide with category links | <img src="examples/genwiki-walk/hop04.jpg" width="360"> |
+| hop05 | 20:28 | 57 | Kategorie:Icons, media section | <img src="examples/genwiki-walk/hop05.jpg" width="360"> |
+| hop06 | 20:34 | 40 | Kategorie:Icons | <img src="examples/genwiki-walk/hop06.jpg" width="360"> |
+| hop07 | 20:37 | 2 | Kategorie:Portal icons | <img src="examples/genwiki-walk/hop07.jpg" width="360"> |
+| hop10 | 20:47 | 2 | presentation slide revisited | <img src="examples/genwiki-walk/hop10.jpg" width="360"> |
+| hop12 | 20:59 | 73 | Kategorie:SVG, flags gallery | <img src="examples/genwiki-walk/hop12.jpg" width="360"> |
+
+### False positives
+
+Three detections are not content states of the walk - kept in the example as
+tool findings:
+
+| hop | time | reason |
+| --- | --- | --- |
+| hop08 | 20:41 | cursor-motion burst on the unchanged Kategorie:Portal icons page |
+| hop09 | 20:45 | transient browser tab-hover preview overlay, page unchanged |
+| hop11 | 20:50 | blank frame: Kategorie:SVG captured before rendering; the settled state is hop12 |
