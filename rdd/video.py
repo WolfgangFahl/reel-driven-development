@@ -3,6 +3,7 @@
 @author: wf
 """
 
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
@@ -26,14 +27,17 @@ class VideoSegment:
 
         Raises:
             ImportError: if OpenCV is not available.
-            ValueError: if the video cannot be opened.
+            FileNotFoundError: if the video file does not exist.
+            ValueError: if the existing file cannot be decoded.
         """
         if cv2 is None:
             raise ImportError("opencv is required for VideoSegment")
+        if not Path(path).exists():
+            raise FileNotFoundError(f"video file does not exist: {path}")
         self.path = path
         self.cap = cv2.VideoCapture(path)
         if not self.cap.isOpened():
-            raise ValueError(f"can not open video {path}")
+            raise ValueError(f"can not decode video {path}")
         self.fps = self.cap.get(cv2.CAP_PROP_FPS) or 25.0
         frame_count = self.cap.get(cv2.CAP_PROP_FRAME_COUNT)
         self.video_duration = frame_count / self.fps if frame_count else 0.0
