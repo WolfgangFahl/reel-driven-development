@@ -39,6 +39,8 @@ class VideoSegment:
         if not self.cap.isOpened():
             raise ValueError(f"can not decode video {path}")
         self.fps = self.cap.get(cv2.CAP_PROP_FPS) or 25.0
+        self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         frame_count = self.cap.get(cv2.CAP_PROP_FRAME_COUNT)
         self.video_duration = frame_count / self.fps if frame_count else 0.0
         self.start = start

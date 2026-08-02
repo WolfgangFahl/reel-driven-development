@@ -44,6 +44,37 @@ class TestBlockMAE(Basetest):
                 f"block {self.metric.score(frame_a, frame_b):.2f}"
             )
 
+    def test_region_bounds(self):
+        """Issue #5: pixel and fractional regions must map to the same crop
+        bounds on the native frame."""
+        pixel_metric = BlockMAE(region=(0, 0, 1120, 720))
+        fractional_metric = BlockMAE(region=(0.0, 0.0, 0.875, 1.0))
+        shape = (720, 1280)
+        self.assertFalse(BlockMAE.is_fractional(pixel_metric.region))
+        self.assertTrue(BlockMAE.is_fractional(fractional_metric.region))
+        self.assertEqual((0, 720, 0, 1120), pixel_metric.region_bounds(shape))
+        self.assertEqual((0, 720, 0, 1120), fractional_metric.region_bounds(shape))
+        self.assertEqual((0, 720, 0, 1280), BlockMAE().region_bounds(shape))
+
+    def test_region_restricts_scoring(self):
+        """Issue #5: a change outside the region must not score; the same
+        change inside the full frame must."""
+        frame_a = self.make_frame()
+        frame_b = self.make_frame()
+        frame_b[0:80, 1200:1280] = 255  # top-right corner tile
+        self.assertTrue(self.metric.changed(frame_a, frame_b))
+        region_metric = BlockMAE(region=(0.0, 0.0, 0.875, 1.0))
+        self.assertFalse(region_metric.changed(frame_a, frame_b))
+        self.assertEqual(0.0, region_metric.score(frame_a, frame_b))
+
+    def test_region_smaller_than_grid(self):
+        """A region smaller than the block grid must raise instead of failing
+        silently."""
+        metric = BlockMAE(region=(0, 0, 8, 4))
+        frame = self.make_frame()
+        with self.assertRaises(ValueError):
+            metric.score(frame, frame)
+
     def test_color_frames(self):
         """The metric must accept 3-channel color frames."""
         frame_a = np.zeros((360, 640, 3), dtype=np.uint8)

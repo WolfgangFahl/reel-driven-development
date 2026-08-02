@@ -3,7 +3,11 @@
 @author: wf
 """
 
+from typing import Optional, Tuple
+
 import numpy as np
+
+Region = Tuple[float, float, float, float]
 
 
 class BlockMAE:
@@ -13,19 +17,73 @@ class BlockMAE:
     as a dropdown (2-8% of the frame) or a highlighted option (<1%).
     Scoring a grid of blocks keeps such changes above threshold in their
     own block - see issue #1 of reel-driven-development.
+
+    A region of interest restricts the metric to the part of the frame
+    that belongs to the walk, so that a permanently changing area
+    outside it - live participant tiles, a clock, a scrolling log - can
+    not defeat the detection - see issue #5.
     """
 
-    def __init__(self, blocks_x: int = 16, blocks_y: int = 9, threshold: float = 12.0):
-        """Initialize the block grid and change threshold.
+    def __init__(
+        self,
+        blocks_x: int = 16,
+        blocks_y: int = 9,
+        threshold: float = 12.0,
+        region: Optional[Region] = None,
+    ):
+        """Initialize the block grid, change threshold and region.
 
         Args:
             blocks_x: number of block columns.
             blocks_y: number of block rows.
             threshold: minimum block score (gray levels) counting as change.
+            region: region of interest (x, y, width, height) the metric is
+                restricted to; fractional values (width and height <= 1)
+                scale with the scored frame, pixel values apply to it
+                directly; defaults to the full frame.
         """
         self.blocks_x = blocks_x
         self.blocks_y = blocks_y
         self.threshold = threshold
+        self.region = region
+
+    @staticmethod
+    def is_fractional(region: Region) -> bool:
+        """Decide whether a region is given fractionally.
+
+        Args:
+            region: region of interest (x, y, width, height).
+
+        Returns:
+            True if width and height are fractions of the frame.
+        """
+        _x, _y, width, height = region
+        fractional = width <= 1.0 and height <= 1.0
+        return fractional
+
+    def region_bounds(self, shape: Tuple[int, ...]) -> Tuple[int, int, int, int]:
+        """Compute the pixel bounds of the region for a frame shape.
+
+        Args:
+            shape: (height, width) of the scored frame.
+
+        Returns:
+            (y0, y1, x0, x1) crop bounds, clamped to the frame.
+        """
+        frame_height, frame_width = shape[0], shape[1]
+        x0, y0 = 0, 0
+        x1, y1 = frame_width, frame_height
+        if self.region is not None:
+            x, y, width, height = self.region
+            if self.is_fractional(self.region):
+                x, width = x * frame_width, width * frame_width
+                y, height = y * frame_height, height * frame_height
+            x0 = min(max(int(round(x)), 0), frame_width)
+            y0 = min(max(int(round(y)), 0), frame_height)
+            x1 = min(max(int(round(x + width)), x0), frame_width)
+            y1 = min(max(int(round(y + height)), y0), frame_height)
+        bounds = (y0, y1, x0, x1)
+        return bounds
 
     def to_gray(self, frame: np.ndarray) -> np.ndarray:
         """Convert a frame to a float32 grayscale array.
@@ -55,7 +113,14 @@ class BlockMAE:
         gray_a = self.to_gray(frame_a)
         gray_b = self.to_gray(frame_b)
         diff = np.abs(gray_a - gray_b)
+        y0, y1, x0, x1 = self.region_bounds(diff.shape)
+        diff = diff[y0:y1, x0:x1]
         height, width = diff.shape
+        if height < self.blocks_y or width < self.blocks_x:
+            raise ValueError(
+                f"region {width}x{height} is smaller than the "
+                f"{self.blocks_x}x{self.blocks_y} block grid"
+            )
         height_c = (height // self.blocks_y) * self.blocks_y
         width_c = (width // self.blocks_x) * self.blocks_x
         diff = diff[:height_c, :width_c]
