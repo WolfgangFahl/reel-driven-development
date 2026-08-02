@@ -13,6 +13,7 @@ from typing import List, Optional
 from rdd.bisection import BisectionResult, BisectionSampler, ChangeBracket
 from rdd.blockmae import BlockMAE
 from rdd.hop import Hop
+from rdd.progress import JsonlRenderer, ProgressEmitter, TqdmRenderer, mmss
 from rdd.video import VideoSegment
 
 try:
@@ -38,6 +39,10 @@ class HopDetection:
         metric: Optional[BlockMAE] = None,
         prefix: str = "hop",
         min_stable: float = 1.0,
+        granularity: Optional[float] = None,
+        target_window: float = 5.0,
+        compare_width: int = 640,
+        progress: Optional[ProgressEmitter] = None,
     ):
         """Initialize the detection.
 
@@ -50,6 +55,11 @@ class HopDetection:
             prefix: file name prefix for evidence frames.
             min_stable: seconds of stability separating two hops; a burst
                 of changes (scrolling, page rendering) is one hop.
+            granularity: minimal interval the bisection refines to in
+                seconds; defaults to one frame.
+            target_window: seconds sampled around each transcript target.
+            compare_width: width frames are downscaled to for comparison.
+            progress: progress emitter; defaults to a renderer-less one.
         """
         self.video_path = video_path
         self.start = start
@@ -58,23 +68,36 @@ class HopDetection:
         self.metric = metric if metric is not None else BlockMAE()
         self.prefix = prefix
         self.min_stable = min_stable
+        self.granularity = granularity
+        self.target_window = target_window
+        self.compare_width = compare_width
+        self.progress = progress if progress is not None else ProgressEmitter()
         self.result: Optional[BisectionResult] = None
         self.groups: List[List[ChangeBracket]] = []
 
-    @staticmethod
-    def mmss(time_sec: float) -> str:
-        """Format seconds as MM:SS.
+    def parameters(self) -> dict:
+        """Collect the effective parameter set of this detection.
 
-        Args:
-            time_sec: time in seconds.
+        The set is recorded in hops.json so that a hop set carries the
+        values that produced it and a run is reproducible from its own
+        output - see issue #4.
 
         Returns:
-            zero-padded MM:SS string.
+            dict of parameter name to effective value; granularity is
+            None when the per-video one-frame default applies.
         """
-        minutes = int(time_sec) // 60
-        seconds = int(time_sec) % 60
-        formatted = f"{minutes:02d}:{seconds:02d}"
-        return formatted
+        params = {
+            "threshold": self.metric.threshold,
+            "blocks_x": self.metric.blocks_x,
+            "blocks_y": self.metric.blocks_y,
+            "region": list(self.metric.region) if self.metric.region else None,
+            "min_stable": self.min_stable,
+            "granularity": self.granularity,
+            "target_window": self.target_window,
+            "compare_width": self.compare_width,
+            "prefix": self.prefix,
+        }
+        return params
 
     @staticmethod
     def group_brackets(
@@ -113,8 +136,34 @@ class HopDetection:
             hops ordered by position, one per settled content state.
         """
         segment = VideoSegment(self.video_path, self.start, self.end)
-        sampler = BisectionSampler(segment, self.metric)
+        region = self.metric.region
+        if region is not None and not BlockMAE.is_fractional(region):
+            # normalize a pixel region against the native resolution so
+            # that the compare_width downscale can not shift it
+            x, y, width, height = region
+            self.metric.region = (
+                x / segment.width,
+                y / segment.height,
+                width / segment.width,
+                height / segment.height,
+            )
+        self.progress.emit(
+            "run_start",
+            video=self.video_path,
+            start=self.start,
+            end=segment.end,
+            parameters=self.parameters(),
+        )
+        sampler = BisectionSampler(
+            segment,
+            self.metric,
+            granularity=self.granularity,
+            target_window=self.target_window,
+            compare_width=self.compare_width,
+            progress=self.progress,
+        )
         self.result = sampler.run(self.targets)
+        self.progress.emit("phase", phase="grouping")
         self.groups = self.group_brackets(self.result.changes, self.min_stable)
         hops = []
         for pos, group in enumerate(self.groups, start=1):
@@ -123,7 +172,7 @@ class HopDetection:
             max_score = max(bracket.score for bracket in group)
             hop = Hop(
                 pos=pos,
-                time=self.mmss(last.after),
+                time=mmss(last.after),
                 node=f"{self.prefix}{pos:02d}",
                 summary=f"{len(group)} change(s) "
                 f"[{first.before:.2f}s,{last.after:.2f}s], "
@@ -153,17 +202,26 @@ class HopDetection:
         out_path.mkdir(parents=True, exist_ok=True)
         segment = VideoSegment(self.video_path, self.start, self.end)
         result = self.result if self.result is not None else BisectionResult()
+        self.progress.emit("phase", phase="emit")
         for hop, group in zip(hops, self.groups):
             frame = segment.frame_at(group[-1].after)
             if frame is not None:
                 image_path = out_path / f"{hop.node}.jpg"
                 cv2.imwrite(str(image_path), frame)
                 hop.screenshot = image_path.name
+            self.progress.emit(
+                "hop",
+                pos=group[-1].after,
+                hop_pos=hop.pos,
+                time=hop.time,
+                screenshot=hop.screenshot,
+            )
         segment.close()
         report = {
             "video": self.video_path,
             "start": self.start,
             "end": self.end,
+            "parameters": self.parameters(),
             "frames_sampled": result.frames_sampled,
             "hops": [asdict(hop) for hop in hops],
             "absences": [asdict(proof) for proof in result.absences],
@@ -171,7 +229,38 @@ class HopDetection:
         json_path = out_path / "hops.json"
         with json_path.open("w") as json_file:
             json.dump(report, json_file, indent=2)
+        self.progress.emit(
+            "run_end",
+            frames_sampled=result.frames_sampled,
+            brackets=len(result.changes),
+            groups=len(self.groups),
+            hops=len(hops),
+            absences=len(result.absences),
+            status="ok",
+        )
         return json_path
+
+
+def parse_region(value: str) -> tuple:
+    """Parse a region of interest given as x,y,width,height.
+
+    Pixel values refer to the native video frame; fractional values
+    (width and height <= 1) are resolution independent - see issue #5.
+
+    Args:
+        value: e.g. "0,0,1708,1080" or "0,0,0.89,1.0".
+
+    Returns:
+        (x, y, width, height) as floats.
+
+    Raises:
+        ValueError: if the value has no four comma-separated numbers.
+    """
+    parts = value.split(",")
+    if len(parts) != 4:
+        raise ValueError(f"region needs x,y,width,height - got {value}")
+    region = tuple(float(part) for part in parts)
+    return region
 
 
 def parse_time(value: str) -> float:
@@ -192,14 +281,14 @@ def parse_time(value: str) -> float:
     return seconds
 
 
-def main(argv: Optional[List[str]] = None) -> int:
-    """Command line entry point for hop detection.
+def get_parser() -> argparse.ArgumentParser:
+    """Create the hopdetect argument parser.
 
-    Args:
-        argv: command line arguments; defaults to sys.argv.
+    Every parameter that influences the hop set is a flag here so that
+    a run is reproducible from its command line - see issue #4.
 
     Returns:
-        exit code 0 on success.
+        the configured argument parser.
     """
     parser = argparse.ArgumentParser(description="RDD hop detection")
     parser.add_argument("video", help="path of the video file")
@@ -218,7 +307,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--threshold",
         type=float,
         default=12.0,
-        help="block-MAE change threshold",
+        help="block-MAE change threshold (gray levels)",
     )
     parser.add_argument(
         "--min-stable",
@@ -226,8 +315,87 @@ def main(argv: Optional[List[str]] = None) -> int:
         default=1.0,
         help="seconds of stability separating two hops",
     )
-    args = parser.parse_args(argv)
-    metric = BlockMAE(threshold=args.threshold)
+    parser.add_argument(
+        "--blocks-x",
+        type=int,
+        default=16,
+        help="block grid columns; a finer grid raises the score of a "
+        "small-area change, so choose together with --threshold",
+    )
+    parser.add_argument(
+        "--blocks-y",
+        type=int,
+        default=9,
+        help="block grid rows; see --blocks-x",
+    )
+    parser.add_argument(
+        "--granularity",
+        type=float,
+        default=None,
+        help="minimal bisection interval in seconds; default one frame",
+    )
+    parser.add_argument(
+        "--target-window",
+        type=float,
+        default=5.0,
+        help="seconds sampled around each transcript target",
+    )
+    parser.add_argument(
+        "--compare-width",
+        type=int,
+        default=640,
+        help="width frames are downscaled to before comparison; a block "
+        "must stay wide enough to average meaningfully, see --blocks-x",
+    )
+    parser.add_argument(
+        "--prefix",
+        default="hop",
+        help="evidence frame name prefix",
+    )
+    parser.add_argument(
+        "--region",
+        default=None,
+        help="region of interest x,y,width,height the change metric is "
+        "restricted to - pixel or fractional values; evidence frames "
+        "stay full frames",
+    )
+    parser.add_argument(
+        "--progress",
+        action="store_true",
+        help="show a progress bar; phase 1 is determinate, the adaptive "
+        "bisection shows the known quantities instead of a percentage",
+    )
+    parser.add_argument(
+        "--progress-details",
+        default=None,
+        metavar="PATH",
+        help="write machine-readable progress as JSONL to PATH; - means " "stderr",
+    )
+    parser.add_argument(
+        "--progress-every",
+        type=float,
+        default=1.0,
+        help="minimum seconds between JSONL sample events",
+    )
+    return parser
+
+
+def from_args(args: argparse.Namespace) -> HopDetection:
+    """Build a HopDetection from parsed command line arguments.
+
+    Args:
+        args: parsed hopdetect arguments.
+
+    Returns:
+        the configured HopDetection.
+    """
+    region = parse_region(args.region) if args.region is not None else None
+    metric = BlockMAE(
+        blocks_x=args.blocks_x,
+        blocks_y=args.blocks_y,
+        threshold=args.threshold,
+        region=region,
+    )
     end = parse_time(args.end) if args.end is not None else None
     hop_detection = HopDetection(
         video_path=args.video,
@@ -235,10 +403,42 @@ def main(argv: Optional[List[str]] = None) -> int:
         end=end,
         targets=[parse_time(t) for t in args.target],
         metric=metric,
+        prefix=args.prefix,
         min_stable=args.min_stable,
+        granularity=args.granularity,
+        target_window=args.target_window,
+        compare_width=args.compare_width,
     )
+    return hop_detection
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    """Command line entry point for hop detection.
+
+    Args:
+        argv: command line arguments; defaults to sys.argv.
+
+    Returns:
+        exit code 0 on success.
+    """
+    parser = get_parser()
+    args = parser.parse_args(argv)
+    hop_detection = from_args(args)
+    details_file = None
+    if args.progress_details is not None:
+        if args.progress_details == "-":
+            details_stream = sys.stderr
+        else:
+            details_file = open(args.progress_details, "w")
+            details_stream = details_file
+        renderer = JsonlRenderer(details_stream, progress_every=args.progress_every)
+        hop_detection.progress.attach(renderer)
+    if args.progress:
+        hop_detection.progress.attach(TqdmRenderer())
     hops = hop_detection.detect()
     json_path = hop_detection.save(hops, args.out)
+    if details_file is not None:
+        details_file.close()
     result = hop_detection.result
     frames_sampled = result.frames_sampled if result is not None else 0
     print(f"{len(hops)} hops from {frames_sampled} sampled frames -> {json_path}")

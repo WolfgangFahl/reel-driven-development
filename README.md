@@ -30,6 +30,90 @@ walks through a system while talking. RDD treats the reel as a graph walk:
 The first tooling milestone is HopDetection - see
 [issue #1](https://github.com/WolfgangFahl/reel-driven-development/issues/1).
 
+## hopdetect flags
+
+Every parameter that influences the hop set is a flag, and the effective
+parameter set is recorded in `hops.json`, so a run is reproducible from its
+own output ([issue #4](https://github.com/WolfgangFahl/reel-driven-development/issues/4)).
+
+| flag | meaning | default | change it when |
+| --- | --- | --- | --- |
+| `--start` | segment start (seconds or MM:SS) | 0 | processing a part of the reel |
+| `--end` | segment end (seconds or MM:SS) | video duration | processing a part of the reel |
+| `--target` | transcript-named capture time, repeatable | none | the transcript names a moment that must have an evidence frame or a proven absence |
+| `--out` | output directory for frames and JSON | `hops` | keeping several hop sets apart |
+| `--threshold` | block-MAE change threshold (gray levels) | 12.0 | small UI changes are missed (lower) or noise is detected (raise); choose together with the grid, never independently |
+| `--min-stable` | seconds of stability separating two hops | 1.0 | bursts (scrolling, rendering) split into several hops (raise) or distinct fast hops merge (lower) |
+| `--blocks-x` | block grid columns | 16 | the smallest change area that must stay above threshold is smaller than a block; a finer grid raises the score of a small-area change, so re-check `--threshold` |
+| `--blocks-y` | block grid rows | 9 | see `--blocks-x` |
+| `--granularity` | minimal bisection interval in seconds | one frame | frame-level precision is not needed and sampling cost matters (raise) |
+| `--target-window` | seconds sampled around each transcript target | 5.0 | the narrative anchors are less precise than ±5 s (raise) |
+| `--compare-width` | width frames are downscaled to before comparison | 640 | fine detail decides hops (raise); a block must stay wide enough to average meaningfully: keep `compare_width / blocks_x` well above ~10 pixels |
+| `--prefix` | evidence frame name prefix | `hop` | several walks share one output directory |
+| `--region` | region of interest `x,y,width,height` the change metric is restricted to | full frame | the frame contains a permanently changing area that is not part of the walk |
+
+### Region of interest
+
+Block-MAE scores the whole frame by default. A frame area that changes
+permanently without being part of the walk - live participant tiles in a
+conference share, a playing video, a clock, a scrolling log pane - defeats the
+detection: every frame pair "differs", the bisection degenerates into a dense
+frame-by-frame scan, all changes merge into a single hop and proven absence
+becomes unreachable
+([issue #5](https://github.com/WolfgangFahl/reel-driven-development/issues/5)).
+
+Worked example - a conference screen-share with a live participant tile
+column on the right 11% of a 1920x1080 frame:
+
+```bash
+hopdetect meeting.mp4 --region 0,0,0.89,1.0 --out hops
+```
+
+* pixel form `--region 0,0,1708,1080` refers to the native video frame;
+  the fractional form is resolution independent
+* the region applies to the change metric only - evidence frames stay full
+  frames, so the reader always sees the whole picture
+* `hops.json` records the effective (fractional) region: a hop set produced
+  under a region is only interpretable together with it
+
+### Progress bar
+
+`--progress` shows the state of a running detection
+([issue #6](https://github.com/WolfgangFahl/reel-driven-development/issues/6)).
+Phase 1 (anchors and target windows) has a known count and is a determinate
+bar. Phase 2 (bisection) is adaptive - the total amount of work is not known
+when the run starts, so a percentage would be a fabrication: it shows the
+quantities that are actually known - frames sampled, change brackets settled,
+intervals open and the current position in the reel. A final line reports the
+totals, matching `hops.json`. Bars render only on a TTY; redirected output
+stays clean.
+
+### Machine-readable progress
+
+`--progress-details PATH` writes one JSON object per line (JSONL) as the run
+proceeds, flushed per event; `-` means stderr, so `hops.json` stays separate
+([issue #7](https://github.com/WolfgangFahl/reel-driven-development/issues/7)).
+An agent driving `hopdetect` can abort a degenerate run early and account for
+proven-absence claims at the moment they are made.
+
+Every event carries `event` and `t` (wall seconds since run start), plus
+`pos` (position in the reel in seconds) where a position applies. The schema
+is an interface: additive changes only.
+
+| event | fields |
+| --- | --- |
+| `run_start` | `video`, `start`, `end`, `parameters` (the effective parameter set) |
+| `phase` | `phase`: `anchors`, `targets`, `bisection`, `grouping`, `emit`; `total` where the phase has a known count |
+| `sample` | `pos`, `frames` sampled so far, `open` intervals, `brackets` settled so far; rate bounded by `--progress-every` seconds |
+| `bracket` | `pos`, `before`, `after`, `score` |
+| `target` | `pos`, `resolution`: `found` with `time`, or `absent` with `window`, `granularity` and `frames_compared` |
+| `hop` | `pos`, `hop_pos`, `time`, `screenshot` |
+| `run_end` | `frames_sampled`, `brackets`, `groups`, `hops`, `absences`, `status`; `t` is the wall time |
+
+A `target` event with `resolution: absent` is the machine-readable form of a
+proven-absence claim - it carries the window searched and the granularity
+reached at the moment the claim is made.
+
 ## Example: GenWiki walk
 
 Acceptance run on the [test video](https://www.youtube.com/watch?v=gVxk-zRb0wQ)
