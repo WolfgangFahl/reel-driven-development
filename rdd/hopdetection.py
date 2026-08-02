@@ -10,10 +10,13 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import List, Optional
 
+from basemkit.base_cmd import BaseCmd
+
 from rdd.bisection import BisectionResult, BisectionSampler, ChangeBracket
 from rdd.blockmae import BlockMAE
 from rdd.hop import Hop
 from rdd.progress import JsonlRenderer, ProgressEmitter, TqdmRenderer, mmss
+from rdd.version import Version
 from rdd.video import VideoSegment
 
 try:
@@ -281,102 +284,169 @@ def parse_time(value: str) -> float:
     return seconds
 
 
+class HopdetectCmd(BaseCmd):
+    """Hopdetect command line interface.
+
+    BITPlan house-standard CLI per the BaseCmd pattern of pybasemkit.
+    Every parameter that influences the hop set is a flag here so that
+    a run is reproducible from its command line - see issue #4.
+    """
+
+    def __init__(self):
+        """Initialize with the reel-driven-development version info."""
+        super().__init__(Version())
+
+    def add_arguments(self, parser: argparse.ArgumentParser):
+        """Add the hopdetect arguments to the given parser.
+
+        Args:
+            parser: the parser to add arguments to.
+        """
+        super().add_arguments(parser)
+        parser.add_argument("video", nargs="?", help="path of the video file")
+        parser.add_argument(
+            "--start", default="0", help="segment start (seconds or MM:SS)"
+        )
+        parser.add_argument(
+            "--end", default=None, help="segment end (seconds or MM:SS)"
+        )
+        parser.add_argument(
+            "--target",
+            action="append",
+            default=[],
+            help="transcript-named capture time (seconds or MM:SS), repeatable",
+        )
+        parser.add_argument(
+            "--out", default="hops", help="output directory for frames and JSON"
+        )
+        parser.add_argument(
+            "--threshold",
+            type=float,
+            default=12.0,
+            help="block-MAE change threshold (gray levels)",
+        )
+        parser.add_argument(
+            "--min-stable",
+            type=float,
+            default=1.0,
+            help="seconds of stability separating two hops",
+        )
+        parser.add_argument(
+            "--blocks-x",
+            type=int,
+            default=16,
+            help="block grid columns; a finer grid raises the score of a "
+            "small-area change, so choose together with --threshold",
+        )
+        parser.add_argument(
+            "--blocks-y",
+            type=int,
+            default=9,
+            help="block grid rows; see --blocks-x",
+        )
+        parser.add_argument(
+            "--granularity",
+            type=float,
+            default=None,
+            help="minimal bisection interval in seconds; default one frame",
+        )
+        parser.add_argument(
+            "--target-window",
+            type=float,
+            default=5.0,
+            help="seconds sampled around each transcript target",
+        )
+        parser.add_argument(
+            "--compare-width",
+            type=int,
+            default=640,
+            help="width frames are downscaled to before comparison; a block "
+            "must stay wide enough to average meaningfully, see --blocks-x",
+        )
+        parser.add_argument(
+            "--prefix",
+            default="hop",
+            help="evidence frame name prefix",
+        )
+        parser.add_argument(
+            "--region",
+            default=None,
+            help="region of interest x,y,width,height the change metric is "
+            "restricted to - pixel or fractional values; evidence frames "
+            "stay full frames",
+        )
+        parser.add_argument(
+            "--progress",
+            action="store_true",
+            help="show a progress bar; phase 1 is determinate, the adaptive "
+            "bisection shows the known quantities instead of a percentage",
+        )
+        parser.add_argument(
+            "--progress-details",
+            default=None,
+            metavar="PATH",
+            help="write machine-readable progress as JSONL to PATH; - means " "stderr",
+        )
+        parser.add_argument(
+            "--progress-every",
+            type=float,
+            default=1.0,
+            help="minimum seconds between JSONL sample events",
+        )
+
+    def handle_args(self, args: argparse.Namespace) -> bool:
+        """Handle the parsed arguments by running the detection.
+
+        Args:
+            args: parsed argument namespace.
+
+        Returns:
+            True if the arguments were handled.
+
+        Raises:
+            ValueError: if the video argument is missing.
+        """
+        handled = super().handle_args(args)
+        if not handled:
+            if args.video is None:
+                raise ValueError("the video argument is required")
+            hop_detection = from_args(args)
+            details_file = None
+            if args.progress_details is not None:
+                if args.progress_details == "-":
+                    details_stream = sys.stderr
+                else:
+                    details_file = open(args.progress_details, "w")
+                    details_stream = details_file
+                renderer = JsonlRenderer(
+                    details_stream, progress_every=args.progress_every
+                )
+                hop_detection.progress.attach(renderer)
+            if args.progress:
+                hop_detection.progress.attach(TqdmRenderer())
+            hops = hop_detection.detect()
+            json_path = hop_detection.save(hops, args.out)
+            if details_file is not None:
+                details_file.close()
+            result = hop_detection.result
+            frames_sampled = result.frames_sampled if result is not None else 0
+            print(
+                f"{len(hops)} hops from {frames_sampled} sampled frames "
+                f"-> {json_path}"
+            )
+            handled = True
+        return handled
+
+
 def get_parser() -> argparse.ArgumentParser:
     """Create the hopdetect argument parser.
 
-    Every parameter that influences the hop set is a flag here so that
-    a run is reproducible from its command line - see issue #4.
-
     Returns:
-        the configured argument parser.
+        the configured argument parser including the BaseCmd standard
+        options.
     """
-    parser = argparse.ArgumentParser(description="RDD hop detection")
-    parser.add_argument("video", help="path of the video file")
-    parser.add_argument("--start", default="0", help="segment start (seconds or MM:SS)")
-    parser.add_argument("--end", default=None, help="segment end (seconds or MM:SS)")
-    parser.add_argument(
-        "--target",
-        action="append",
-        default=[],
-        help="transcript-named capture time (seconds or MM:SS), repeatable",
-    )
-    parser.add_argument(
-        "--out", default="hops", help="output directory for frames and JSON"
-    )
-    parser.add_argument(
-        "--threshold",
-        type=float,
-        default=12.0,
-        help="block-MAE change threshold (gray levels)",
-    )
-    parser.add_argument(
-        "--min-stable",
-        type=float,
-        default=1.0,
-        help="seconds of stability separating two hops",
-    )
-    parser.add_argument(
-        "--blocks-x",
-        type=int,
-        default=16,
-        help="block grid columns; a finer grid raises the score of a "
-        "small-area change, so choose together with --threshold",
-    )
-    parser.add_argument(
-        "--blocks-y",
-        type=int,
-        default=9,
-        help="block grid rows; see --blocks-x",
-    )
-    parser.add_argument(
-        "--granularity",
-        type=float,
-        default=None,
-        help="minimal bisection interval in seconds; default one frame",
-    )
-    parser.add_argument(
-        "--target-window",
-        type=float,
-        default=5.0,
-        help="seconds sampled around each transcript target",
-    )
-    parser.add_argument(
-        "--compare-width",
-        type=int,
-        default=640,
-        help="width frames are downscaled to before comparison; a block "
-        "must stay wide enough to average meaningfully, see --blocks-x",
-    )
-    parser.add_argument(
-        "--prefix",
-        default="hop",
-        help="evidence frame name prefix",
-    )
-    parser.add_argument(
-        "--region",
-        default=None,
-        help="region of interest x,y,width,height the change metric is "
-        "restricted to - pixel or fractional values; evidence frames "
-        "stay full frames",
-    )
-    parser.add_argument(
-        "--progress",
-        action="store_true",
-        help="show a progress bar; phase 1 is determinate, the adaptive "
-        "bisection shows the known quantities instead of a percentage",
-    )
-    parser.add_argument(
-        "--progress-details",
-        default=None,
-        metavar="PATH",
-        help="write machine-readable progress as JSONL to PATH; - means " "stderr",
-    )
-    parser.add_argument(
-        "--progress-every",
-        type=float,
-        default=1.0,
-        help="minimum seconds between JSONL sample events",
-    )
+    cmd = HopdetectCmd()
+    parser = cmd.get_arg_parser()
     return parser
 
 
@@ -419,30 +489,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         argv: command line arguments; defaults to sys.argv.
 
     Returns:
-        exit code 0 on success.
+        exit code: 0 = OK, 1 = KeyboardInterrupt, 2 = Exception.
     """
-    parser = get_parser()
-    args = parser.parse_args(argv)
-    hop_detection = from_args(args)
-    details_file = None
-    if args.progress_details is not None:
-        if args.progress_details == "-":
-            details_stream = sys.stderr
-        else:
-            details_file = open(args.progress_details, "w")
-            details_stream = details_file
-        renderer = JsonlRenderer(details_stream, progress_every=args.progress_every)
-        hop_detection.progress.attach(renderer)
-    if args.progress:
-        hop_detection.progress.attach(TqdmRenderer())
-    hops = hop_detection.detect()
-    json_path = hop_detection.save(hops, args.out)
-    if details_file is not None:
-        details_file.close()
-    result = hop_detection.result
-    frames_sampled = result.frames_sampled if result is not None else 0
-    print(f"{len(hops)} hops from {frames_sampled} sampled frames -> {json_path}")
-    return 0
+    cmd = HopdetectCmd()
+    exit_code = cmd.run(argv)
+    return exit_code
 
 
 if __name__ == "__main__":

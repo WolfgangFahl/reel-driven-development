@@ -65,6 +65,16 @@ python -m unittest tests.test_hop.TestHop.test_hop
 - Maximum line length: 88 characters (black default)
 - Imports: three groups (standard library, third-party, local), sorted by isort
 
+## CLI Standard
+
+The `hopdetect` CLI follows the BITPlan house standard: `HopdetectCmd`
+subclasses `basemkit.base_cmd.BaseCmd`, which provides `-a/--about`,
+`-d/--debug`, `--debugServer`, `-f/--force`, `-q/--quiet`, `-v/--verbose`,
+`-V/--version` and the exit codes 0 = OK, 1 = KeyboardInterrupt,
+2 = Exception. Any new CLI in this project subclasses `BaseCmd` - never
+plain `argparse`. Pattern reference: the
+[CLI Tooling section of the pybasemkit README](https://github.com/WolfgangFahl/pybasemkit#cli-tooling).
+
 ## Code Style Guidelines
 
 - Google-style docstrings on every public function and class
