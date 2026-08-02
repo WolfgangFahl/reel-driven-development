@@ -23,6 +23,8 @@ dependencies = [
   "opencv-python-headless",
   # https://pypi.org/project/scenedetect/
   "scenedetect>=0.7",
+  # https://pypi.org/project/tqdm/
+  "tqdm",
 ]
 requires-python = ">=3.10"
 

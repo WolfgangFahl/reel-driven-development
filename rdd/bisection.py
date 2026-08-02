@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 from rdd.blockmae import BlockMAE
+from rdd.progress import ProgressEmitter
 
 try:
     import cv2
@@ -70,6 +71,7 @@ class BisectionSampler:
         granularity: Optional[float] = None,
         target_window: float = 5.0,
         compare_width: int = 640,
+        progress: Optional[ProgressEmitter] = None,
     ):
         """Initialize the sampler.
 
@@ -79,6 +81,7 @@ class BisectionSampler:
             granularity: minimal interval to bisect; defaults to one frame.
             target_window: seconds sampled around each transcript target.
             compare_width: width frames are downscaled to for comparison.
+            progress: progress emitter; defaults to a renderer-less one.
         """
         self.segment = segment
         self.metric = metric if metric is not None else BlockMAE()
@@ -86,6 +89,7 @@ class BisectionSampler:
         self.granularity = step * 1.01
         self.target_window = target_window
         self.compare_width = compare_width
+        self.progress = progress if progress is not None else ProgressEmitter()
         self.frame_cache: Dict[float, Optional[np.ndarray]] = {}
         self.pair_cache: Dict[Tuple[float, float], float] = {}
 
@@ -158,19 +162,45 @@ class BisectionSampler:
         targets = targets if targets is not None else []
         start = self.segment.start
         end = self.segment.end
-        times = {start, (start + end) / 2.0, end}
+        anchors = {start, (start + end) / 2.0, end}
+        target_times = set()
         for target in targets:
             for offset in (-self.target_window, 0.0, self.target_window):
-                times.add(min(max(target + offset, start), end))
+                target_times.add(min(max(target + offset, start), end))
+        self.progress.emit("phase", phase="anchors", total=len(anchors))
+        for anchor in sorted(anchors):
+            self.sample(anchor)
+            self.progress.emit(
+                "sample", pos=anchor, frames=len(self.frame_cache), open=0
+            )
+        self.progress.emit("phase", phase="targets", total=len(target_times))
+        for target_time in sorted(target_times):
+            self.sample(target_time)
+            self.progress.emit(
+                "sample", pos=target_time, frames=len(self.frame_cache), open=0
+            )
+        times = anchors | target_times
         sorted_times = sorted(times)
+        self.progress.emit("phase", phase="bisection")
         stable = False
         while not stable:
             stable = True
             inserts = []
+            settled = 0
             for time_a, time_b in zip(sorted_times, sorted_times[1:]):
                 gap = time_b - time_a
-                if gap > self.granularity and self.differs(time_a, time_b):
-                    inserts.append((time_a + time_b) / 2.0)
+                if self.differs(time_a, time_b):
+                    if gap > self.granularity:
+                        inserts.append((time_a + time_b) / 2.0)
+                    else:
+                        settled += 1
+                self.progress.emit(
+                    "sample",
+                    pos=time_a,
+                    frames=len(self.frame_cache),
+                    open=len(inserts),
+                    brackets=settled,
+                )
             if inserts:
                 stable = False
                 times.update(inserts)
@@ -184,12 +214,26 @@ class BisectionSampler:
                     score=self.pair_score(time_a, time_b),
                 )
                 changes.append(bracket)
+                self.progress.emit(
+                    "bracket",
+                    pos=time_b,
+                    before=round(time_a, 3),
+                    after=round(time_b, 3),
+                    score=round(bracket.score, 2),
+                )
         absences = []
         for target in targets:
             lo = min(max(target - self.target_window, start), end)
             hi = min(max(target + self.target_window, start), end)
             in_window = [c for c in changes if lo <= c.after <= hi]
-            if not in_window:
+            if in_window:
+                self.progress.emit(
+                    "target",
+                    pos=target,
+                    resolution="found",
+                    time=round(in_window[0].after, 3),
+                )
+            else:
                 window_times = [t for t in sorted_times if lo <= t <= hi]
                 proof = AbsenceProof(
                     target=target,
@@ -198,6 +242,14 @@ class BisectionSampler:
                     frames_compared=len(window_times),
                 )
                 absences.append(proof)
+                self.progress.emit(
+                    "target",
+                    pos=target,
+                    resolution="absent",
+                    window=self.target_window,
+                    granularity=round(self.granularity, 4),
+                    frames_compared=proof.frames_compared,
+                )
         result = BisectionResult(
             times=sorted_times,
             changes=changes,
