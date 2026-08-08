@@ -12,6 +12,11 @@ Reel Driven Development (RDD) turns recorded user walks (reels) into domain stor
 
 Method reference: https://wiki.bitplan.com/index.php/Reel_Driven_Development
 
+Schema reference: https://contexts.bitplan.com/index.php/Meeting
+
+## Agent to apply
+The python expert Agent/Guido is to be consulted if available in the current context
+
 ## Core Method Rules
 
 - A hop is every context switch (page, browser tab, application) and every relevant interaction (submenu, filter, zoom, sort).
@@ -67,8 +72,8 @@ python -m unittest tests.test_hop.TestHop.test_hop
 
 ## CLI Standard
 
-The `hopdetect` CLI follows the BITPlan house standard: `HopdetectCmd`
-subclasses `basemkit.base_cmd.BaseCmd`, which provides `-a/--about`,
+The `hopdetect` CLI follows the BITPlan house standard a main class with superclass
+`basemkit.base_cmd.BaseCmd`, which provides `-a/--about`,
 `-d/--debug`, `--debugServer`, `-f/--force`, `-q/--quiet`, `-v/--verbose`,
 `-V/--version` and the exit codes 0 = OK, 1 = KeyboardInterrupt,
 2 = Exception. Any new CLI in this project subclasses `BaseCmd` - never

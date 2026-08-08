@@ -17,12 +17,16 @@ license = "Apache-2.0"
 dependencies = [
   # https://pypi.org/project/pybasemkit/
   "pybasemkit>=0.2.2",
-  # https://pypi.org/project/numpy/
-  "numpy",
-  # https://pypi.org/project/opencv-python-headless/
-  "opencv-python-headless",
   # https://pypi.org/project/scenedetect/
   "scenedetect>=0.7",
+  # https://pypi.org/project/numpy/
+  # scenedetect delivers frames as numpy arrays
+  # so we need the library to work on these
+  "numpy",
+  # https://pypi.org/project/opencv-python/
+  # scenedetect encodes images with cv2 and pulls it in
+  # we write evidence frames with the same encoder
+  "opencv-python",
   # https://pypi.org/project/tqdm/
   "tqdm",
 ]
@@ -56,4 +60,4 @@ only-include = ["rdd"]
 "rdd" = "rdd"
 
 [project.scripts]
-hopdetect = "rdd.hopdetection:main"
+hopdetect = "rdd.rdd_cmd:main"

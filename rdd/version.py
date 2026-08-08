@@ -15,7 +15,7 @@ class Version:
     name: str = "reel-driven-development"
     version: str = rdd.__version__
     date: str = "2026-07-30"
-    updated: str = "2026-08-02"
+    updated: str = "2026-08-08"
     description: str = (
         "Reel Driven Development - turn recorded user walks "
         "into domain stories and outcome objects"
