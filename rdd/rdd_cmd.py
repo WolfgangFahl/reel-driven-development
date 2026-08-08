@@ -4,6 +4,7 @@
 """
 
 import argparse
+import os
 import sys
 import time
 from typing import List, Optional
@@ -12,6 +13,7 @@ from basemkit.base_cmd import BaseCmd
 
 from rdd.frame import Reel
 from rdd.hopdetect import BisectionHopDetector, Finding
+from rdd.timeline import Timeline
 from rdd.version import Version
 
 
@@ -55,16 +57,10 @@ class RddCmd(BaseCmd):
             "-o", "--out", default="hops", help="output directory (default: hops)"
         )
         parser.add_argument(
-            "--progress",
-            nargs="?",
+            "--settle",
             type=float,
-            const=1.0,
-            default=None,
-            help="report progress on stderr every n wall clock seconds "
-            "(default: 1.0 when given without a value)",
-        )
-        parser.add_argument(
-            "--no-bar", action="store_true", help="suppress the progress bar"
+            default=1.0,
+            help="seconds without change that end a hop (default: 1.0)",
         )
 
     def handle_args(self, args: argparse.Namespace) -> bool:
@@ -110,19 +106,26 @@ class RddCmd(BaseCmd):
             args: parsed argument namespace.
         """
         reel = Reel(args.video)
-        on_finding = None if args.quiet else self.show
+        on_finding = self.show if args.debug else None
         self.detector = BisectionHopDetector(reel, on_finding=on_finding)
         started = time.time()
-        brackets = self.detector.detect(
-            start_sec=self.time_of(args.start) or 0.0,
-            end_sec=self.time_of(args.end),
-        )
+        start_sec = self.time_of(args.start) or 0.0
+        end_sec = self.time_of(args.end)
+        brackets = self.detector.detect(start_sec=start_sec, end_sec=end_sec)
+        hops = self.detector.hops(settle_sec=args.settle, out_dir=args.out)
+        yaml_path = os.path.join(args.out, "hops.yaml")
+        hops.save_to_yaml_file(yaml_path)
         coverage = self.detector.coverage
+        if not args.quiet:
+            timeline = Timeline(start_sec, end_sec or reel.duration_sec)
+            print(
+                timeline.render(brackets, coverage.resolved_sec, hops), file=sys.stderr
+            )
         print(
-            f"{reel.videoFile}: {len(brackets)} brackets from "
-            f"{coverage.frames_read} of {reel.frame_count} frames, "
+            f"{reel.videoFile}: {hops.hopCount} hops from {len(brackets)} brackets, "
+            f"{coverage.frames_read} of {reel.frame_count} frames read, "
             f"{coverage.fraction:.1%} of {coverage.total_sec:.1f}s resolved "
-            f"in {time.time() - started:.1f}s"
+            f"in {time.time() - started:.1f}s -> {yaml_path}"
         )
 
 

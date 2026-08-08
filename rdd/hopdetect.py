@@ -5,10 +5,12 @@ hop detection by bisection over a reel
 @author: wf
 """
 
+import os
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Tuple
 
 from rdd.frame import Frame, FrameChange, Reel
+from rdd.recording import HopContent, HopContents
 
 
 @dataclass
@@ -155,8 +157,7 @@ class BisectionHopDetector:
         Args:
             finding: the finding to report.
         """
-        if finding.kind == "unchanged":
-            self.coverage.resolved_sec += finding.end_sec - finding.start_sec
+        self.coverage.resolved_sec += finding.end_sec - finding.start_sec
         if finding.bracket is not None:
             self.brackets.append(finding.bracket)
             self.coverage.brackets += 1
@@ -298,3 +299,72 @@ class BisectionHopDetector:
         self.brackets.sort(key=lambda bracket: bracket.before.frame_num)
         brackets = self.brackets
         return brackets
+
+    def groups_of(self, settle_sec: float = 1.0) -> List[List[Bracket]]:
+        """Group the brackets into hops.
+
+        A hop is a state the walk arrives at, not a single change: opening
+        a page, scrolling it and letting it render is one arrival made of
+        many changes. Brackets therefore belong to the same hop while they
+        keep following each other, and a new hop starts only after the
+        content has stayed still for settle_sec.
+
+        Args:
+            settle_sec: seconds without change that end a hop.
+
+        Returns:
+            the brackets grouped per hop, in order.
+        """
+        groups: List[List[Bracket]] = []
+        for bracket in self.brackets:
+            is_new = True
+            if groups:
+                previous = groups[-1][-1]
+                is_new = bracket.start_sec - previous.end_sec >= settle_sec
+            if is_new:
+                groups.append([bracket])
+            else:
+                groups[-1].append(bracket)
+        return groups
+
+    def hops(
+        self, settle_sec: float = 1.0, out_dir: Optional[str] = None
+    ) -> HopContents:
+        """Turn the brackets into hop records with an evidence frame each.
+
+        The evidence frame of a hop is the frame at which its content has
+        settled - the state the walk arrived at, not the blur on the way
+        there. node, url and summary of the walk stay empty: they come from
+        the transcript and are never guessed from the picture.
+
+        Args:
+            settle_sec: seconds without change that end a hop.
+            out_dir: directory the evidence frames are written to; None
+                writes no frames and leaves the screenshot empty.
+
+        Returns:
+            the hops of this run.
+        """
+        hop_contents = HopContents(recording=self.reel.videoFile)
+        for group in self.groups_of(settle_sec):
+            settled = group[-1].after
+            pos = len(hop_contents.hops) + 1
+            screenshot = None
+            if out_dir is not None:
+                os.makedirs(out_dir, exist_ok=True)
+                screenshot = f"hop{pos:02d}.jpg"
+                settled.save(os.path.join(out_dir, screenshot))
+            max_score = max(bracket.score for bracket in group)
+            summary = (
+                f"{len(group)} change(s) "
+                f"[{group[0].start_sec:.2f}s,{group[-1].end_sec:.2f}s], "
+                f"max score {max_score:.1f}, settled at {settled.time_sec:.2f}s"
+            )
+            hop_contents.add(
+                HopContent(
+                    time=settled.timecode,
+                    summary=summary,
+                    screenshot=screenshot,
+                )
+            )
+        return hop_contents
