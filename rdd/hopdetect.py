@@ -8,7 +8,7 @@ hop detection by bisection over a reel
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Tuple
 
-from rdd.frame import Frame, FrameChange
+from rdd.frame import Frame, FrameChange, Reel
 
 
 @dataclass

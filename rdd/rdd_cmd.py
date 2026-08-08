@@ -5,10 +5,13 @@
 
 import argparse
 import sys
+import time
 from typing import List, Optional
 
 from basemkit.base_cmd import BaseCmd
 
+from rdd.frame import Reel
+from rdd.hopdetect import BisectionHopDetector, Finding
 from rdd.version import Version
 
 
@@ -18,6 +21,7 @@ class RddCmd(BaseCmd):
     def __init__(self):
         """Initialize with the reel-driven-development version info."""
         super().__init__(Version())
+        self.detector = None
 
     @staticmethod
     def time_of(text: Optional[str]) -> Optional[float]:
@@ -79,9 +83,47 @@ class RddCmd(BaseCmd):
         if not handled:
             if args.video is None:
                 raise ValueError("the video argument is required")
-            # code for using scene detect missing
+            self.detect(args)
             handled = True
         return handled
+
+    def show(self, finding: Finding):
+        """Show a finding on stderr as it is made.
+
+        Args:
+            finding: the finding to show.
+        """
+        coverage = self.detector.coverage
+        print(
+            f"{finding.kind:9s} {finding.start_sec:8.2f}-{finding.end_sec:8.2f}s "
+            f"score {finding.score:6.1f} | "
+            f"{coverage.frames_read:5d} frames read, "
+            f"{coverage.brackets:4d} brackets, "
+            f"{coverage.fraction:5.1%} resolved",
+            file=sys.stderr,
+        )
+
+    def detect(self, args: argparse.Namespace):
+        """Run the hop detection on the given arguments.
+
+        Args:
+            args: parsed argument namespace.
+        """
+        reel = Reel(args.video)
+        on_finding = None if args.quiet else self.show
+        self.detector = BisectionHopDetector(reel, on_finding=on_finding)
+        started = time.time()
+        brackets = self.detector.detect(
+            start_sec=self.time_of(args.start) or 0.0,
+            end_sec=self.time_of(args.end),
+        )
+        coverage = self.detector.coverage
+        print(
+            f"{reel.videoFile}: {len(brackets)} brackets from "
+            f"{coverage.frames_read} of {reel.frame_count} frames, "
+            f"{coverage.fraction:.1%} of {coverage.total_sec:.1f}s resolved "
+            f"in {time.time() - started:.1f}s"
+        )
 
 
 def main(argv: Optional[List[str]] = None) -> int:
