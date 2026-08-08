@@ -13,7 +13,6 @@ from basemkit.base_cmd import BaseCmd
 
 from rdd.frame import Reel
 from rdd.hopdetect import BisectionHopDetector, Finding
-from rdd.timeline import Timeline
 from rdd.version import Version
 
 
@@ -55,6 +54,18 @@ class RddCmd(BaseCmd):
         parser.add_argument("--end", help="segment end as mm:ss or seconds")
         parser.add_argument(
             "-o", "--out", default="hops", help="output directory (default: hops)"
+        )
+        parser.add_argument(
+            "--progress",
+            nargs="?",
+            type=float,
+            const=1.0,
+            default=None,
+            help="report progress on stderr every n wall clock seconds "
+            "(default: 1.0 when given without a value)",
+        )
+        parser.add_argument(
+            "--no-bar", action="store_true", help="suppress the progress bar"
         )
         parser.add_argument(
             "--settle",
@@ -106,7 +117,7 @@ class RddCmd(BaseCmd):
             args: parsed argument namespace.
         """
         reel = Reel(args.video)
-        on_finding = self.show if args.debug else None
+        on_finding = None if args.quiet else self.show
         self.detector = BisectionHopDetector(reel, on_finding=on_finding)
         started = time.time()
         start_sec = self.time_of(args.start) or 0.0
@@ -116,11 +127,6 @@ class RddCmd(BaseCmd):
         yaml_path = os.path.join(args.out, "hops.yaml")
         hops.save_to_yaml_file(yaml_path)
         coverage = self.detector.coverage
-        if not args.quiet:
-            timeline = Timeline(start_sec, end_sec or reel.duration_sec)
-            print(
-                timeline.render(brackets, coverage.resolved_sec, hops), file=sys.stderr
-            )
         print(
             f"{reel.videoFile}: {hops.hopCount} hops from {len(brackets)} brackets, "
             f"{coverage.frames_read} of {reel.frame_count} frames read, "
