@@ -1,0 +1,120 @@
+#!/bin/bash
+# Bash messaging functions with colored output
+# WF 2025-11-20
+#
+# Usage: 
+#   Source in scripts: source bash_messages
+#   Or add to ~/.bashrc for interactive use
+#
+# Functions:
+#   error "message" [exit_code]  - Red error message (default exits with 1, use 0 to not exit)
+#   success "message"            - Green success message
+#   action "message"             - Blue action/info message
+#   warn "message"               - Yellow warning message
+#
+# Examples:
+#   success "Build completed"
+#   error "File not found" 0     # Don't exit
+#   action "Processing files..."
+#   warn "Disk space low"
+
+# ANSI colors
+# http://www.csc.uvic.ca/~sae/seng265/fall04/tips/s265s047-tips/bash-using-colors.html
+blue='\033[0;34m'
+red='\033[0;31m'
+green='\033[0;32m'
+yellow='\033[1;33m'
+endColor='\033[0m'
+
+#
+# Display a colored message
+# Args:
+#   $1: color code
+#   $2: message text
+#   $3: optional file descriptor (default 1 for stdout)
+#
+color_msg() {
+  local l_color="$1"
+  local l_msg="$2"
+  local l_fd="${3:-1}"
+  echo -e "${l_color}${l_msg}${endColor}" >&"$l_fd"
+}
+
+#
+# Display an error message (stderr) and optionally exit
+# Args:
+#   $1: error message
+#   $2: exit code (optional, 0 means don't exit, default 1)
+#
+error() {
+  local l_msg="$1"
+  local l_exitcode="${2:-1}"
+  color_msg "$red" "✗ Error: $l_msg" 2
+  if [ "$l_exitcode" -ne 0 ]; then
+    exit "$l_exitcode"
+  fi
+}
+
+#
+# Display a success message
+# Args:
+#   $1: success message
+#
+success() {
+  local l_msg="$1"
+  color_msg "$green" "✓ $l_msg"
+}
+
+#
+# Display an action/info message
+# Args:
+#   $1: action message
+#
+action() {
+  local l_msg="$1"
+  color_msg "$blue" "➜ $l_msg"
+}
+
+#
+# Display a warning message
+# Args:
+#   $1: warning message
+#
+warn() {
+  local l_msg="$1"
+  color_msg "$yellow" "⚠ $l_msg"
+}
+
+#
+# Ensure a program is available; install it if not, using per-OS package manager
+# (MacPorts on Darwin, apt on Linux).
+# Args:
+#   $1: l_prog          - the program that must be available (checked via which)
+#   $2: l_linuxpackage  - the apt package name on Linux
+#   $3: l_macospackage  - the MacPorts package name on Darwin
+# Env:
+#   AUTOINSTALL_HINT_ONLY=1  - do NOT install; print the exact install command
+#                              and error out (used by scripts with --init opt-in)
+#
+autoinstall() {
+  local l_prog="$1"
+  local l_linuxpackage="$2"
+  local l_macospackage="$3"
+  local l_os
+  l_os=$(uname)
+  if command -v "$l_prog" >/dev/null 2>&1; then
+    return 0
+  fi
+  local l_cmd
+  case "$l_os" in
+    Darwin) l_cmd="sudo port install $l_macospackage" ;;
+    Linux)  l_cmd="sudo apt-get install $l_linuxpackage" ;;
+    *)      error "$l_prog is not installed and $l_os is not supported for autoinstall" ;;
+  esac
+  if [ "${AUTOINSTALL_HINT_ONLY:-0}" = "1" ]; then
+    warn "$l_prog is not installed — install with: $l_cmd"
+    return 1
+  fi
+  action "installing $l_prog: $l_cmd"
+  eval "$l_cmd"
+}
