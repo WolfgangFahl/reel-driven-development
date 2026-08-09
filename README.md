@@ -41,28 +41,20 @@ The first tooling milestone is HopDetection - see
 | `--progress` | show the progress bar of the running detection | off | a run over a long reel must not be silent ([issue #6](https://github.com/WolfgangFahl/reel-driven-development/issues/6)) |
 
 `hopdetect --help` lists these together with the standard options of
-[pybasemkit](https://github.com/WolfgangFahl/pybasemkit#cli-tooling), and the
-exit code distinguishes success (0), interruption (1) and failure (2).
+[pybasemkit](https://github.com/WolfgangFahl/pybasemkit#cli-tooling).
 
 ## Detectors
 
-Hop candidates come from [PySceneDetect](https://www.scenedetect.com), whose
-detectors are [benchmarked against a labeled corpus](https://www.scenedetect.com/benchmarks/).
-Our own material is screen recordings rather than film, so those numbers do
-not transfer - but a measured detector is preferred over an unmeasured one of
-our own, and the detector is therefore a parameter and never fixed in the code.
+Hop candidates come from the detectors of
+[PySceneDetect](https://www.scenedetect.com), which
+[benchmarks them](https://www.scenedetect.com/benchmarks/).
 
 Each detector is on offer at its library default and at half and double its
-threshold, since one setting says nothing about how a detector answers to it.
-Which setting is right can only be decided against a labeled corpus of reels
-with ground-truth hop boundaries; we have none, so these are measurements and
-not claims.
+threshold. `ThresholdDetector` is not on offer: it detects fades to a
+near-black level.
 
-`ThresholdDetector` is not on offer: it detects fades to a near-black level,
-which our material of mostly conference recordings does not have.
-
-Measured on [examples/genwiki-walk](examples/genwiki-walk) - 1501 frames, 60 s,
-about 1.4 s per run:
+Cuts found on [examples/genwiki-walk](examples/genwiki-walk) - 1501 frames,
+60 s, about 1.4 s per run:
 
 | detector | half | default | double |
 | --- | --- | --- | --- |
@@ -70,9 +62,6 @@ about 1.4 s per run:
 | Content | 17 | 9 | 0 |
 | Hash | 32 | 12 | 0 |
 | Histogram | 13 | 10 | 7 |
-
-The spread is the open question, not the result: nothing here can yet say
-which count is closest to the truth.
 
 ## Output
 
