@@ -107,8 +107,8 @@ autoinstall() {
   fi
   local l_cmd
   case "$l_os" in
-    Darwin) l_cmd="sudo port install $l_macospackage" ;;
-    Linux)  l_cmd="sudo apt-get install $l_linuxpackage" ;;
+    Darwin) l_cmd="sudo port install -N $l_macospackage" ;;
+    Linux)  l_cmd="sudo apt-get install -y $l_linuxpackage" ;;
     *)      error "$l_prog is not installed and $l_os is not supported for autoinstall" ;;
   esac
   if [ "${AUTOINSTALL_HINT_ONLY:-0}" = "1" ]; then
