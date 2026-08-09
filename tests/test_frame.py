@@ -5,7 +5,7 @@
 
 from basemkit.basetest import Basetest
 
-from rdd.frame import Frame, Region
+from rdd.frame import Frame, Region, hop_frame_name, hop_frame_names
 
 
 class TestFrame(Basetest):
@@ -55,3 +55,37 @@ class TestFrame(Basetest):
         self.assertEqual(1120, cropped.width)
         self.assertEqual(frame.height, cropped.height)
         self.assertEqual(frame, frame.crop(None))
+
+    def test_hop_frame_name(self):
+        """Issue #21: an evidence frame is named by its offset in the reel,
+        zero padded to fixed width so that the names sort chronologically."""
+        self.assertEqual("hop-00h02m12s.jpg", hop_frame_name(132.0))
+        self.assertEqual("hop-00h02m12s480ms.jpg", hop_frame_name(132.48, True))
+        self.assertEqual("hop-00h00m00s.jpg", hop_frame_name(0.0))
+        self.assertEqual("hop-00h00m00s000ms.jpg", hop_frame_name(0.0, True))
+        self.assertEqual("hop-01h03m07s.jpg", hop_frame_name(3787.0))
+        self.assertEqual("hop-01h03m07s009ms.jpg", hop_frame_name(3787.009, True))
+
+    def test_hop_frame_names_disambiguate_the_same_second(self):
+        """Issue #21: the millisecond field is emitted only where two hops fall
+        in the same second, and the names stay in reel order."""
+        times = [1.0, 132.0, 132.48, 3787.5, 132.96]
+        names = hop_frame_names(times)
+        self.assertEqual(
+            [
+                "hop-00h00m01s.jpg",
+                "hop-00h02m12s000ms.jpg",
+                "hop-00h02m12s480ms.jpg",
+                "hop-01h03m07s.jpg",
+                "hop-00h02m12s960ms.jpg",
+            ],
+            names,
+        )
+        self.assertEqual(["hop-00h00m05s.jpg"], hop_frame_names([5.0]))
+        self.assertEqual([], hop_frame_names([]))
+
+    def test_hop_frame_names_sort_chronologically(self):
+        """The zero padding must make the plain name order the reel order."""
+        times = [0.5, 9.0, 61.0, 600.0, 3599.0, 3600.0, 36000.0]
+        names = hop_frame_names(times)
+        self.assertEqual(sorted(names), names)

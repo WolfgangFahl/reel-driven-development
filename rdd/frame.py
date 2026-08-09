@@ -17,6 +17,63 @@ from scenedetect import open_video
 from rdd.recording import Recording
 
 
+def hop_frame_name(time_sec: float, with_ms: bool = False) -> str:
+    """The file name of the evidence frame of a hop at the given offset.
+
+    Issue #21: a running number cannot take an insert or a removal, so an
+    evidence frame is named by the point in the reel it shows, which is
+    the identity that survives curation. The fields are zero padded to a
+    fixed width, so the names sort chronologically, and the name without
+    the millisecond part is a prefix of the one with it, so that ordering
+    holds across both forms. No prefix beyond "hop-" is added - the part
+    directory says which reel the frame belongs to.
+
+    Args:
+        time_sec: the offset of the frame in the reel in seconds.
+        with_ms: append the millisecond field; only needed where two hops
+            fall in the same second.
+
+    Returns:
+        the file name, e.g. "hop-00h02m12s.jpg" or "hop-00h02m12s480ms.jpg".
+    """
+    total_ms = int(round(time_sec * 1000))
+    seconds, milliseconds = divmod(total_ms, 1000)
+    hours, rest = divmod(seconds, 3600)
+    minutes, seconds = divmod(rest, 60)
+    name = f"hop-{hours:02d}h{minutes:02d}m{seconds:02d}s"
+    if with_ms:
+        name = f"{name}{milliseconds:03d}ms"
+    name = f"{name}.jpg"
+    return name
+
+
+def hop_frame_names(times_sec: List[float]) -> List[str]:
+    """The evidence frame names of a whole hop set.
+
+    The millisecond field is emitted only where it is needed - where two
+    or more hops fall in the same second - so the common case stays as
+    short as it can be read.
+
+    Args:
+        times_sec: the offsets of the hops in the reel in seconds.
+
+    Returns:
+        one file name per offset, in the given order.
+    """
+    seconds_names = [hop_frame_name(time_sec) for time_sec in times_sec]
+    shared = set()
+    seen = set()
+    for name in seconds_names:
+        if name in seen:
+            shared.add(name)
+        seen.add(name)
+    names = [
+        hop_frame_name(time_sec, with_ms=seconds_name in shared)
+        for time_sec, seconds_name in zip(times_sec, seconds_names)
+    ]
+    return names
+
+
 @dataclass
 class Region:
     """A rectangular part of a frame.

@@ -19,7 +19,7 @@ from scenedetect import (
 )
 
 from rdd.config import HopConfig
-from rdd.frame import Reel
+from rdd.frame import Reel, hop_frame_names
 from rdd.hopset import HopSet
 from rdd.recording import HopContent, HopContents, Recording
 from rdd.version import Version
@@ -144,10 +144,11 @@ class HopDetector:
     def clear(self, out_dir: str, force: bool):
         """Make sure a hop set is not silently mixed with an older one.
 
-        Frames are named by position in the run, so writing a shorter hop
-        set over a longer one leaves the surplus frames of the older run
-        behind and the directory then shows a hop set that never existed.
-        An existing hop set is therefore kept unless it is replaced whole.
+        Writing a hop set over an older one leaves the frames the new run
+        does not cut at behind, and the directory then shows a hop set
+        that never existed. An existing hop set is therefore kept unless
+        it is replaced whole, and replacing it removes the frames the old
+        hop set named.
 
         Args:
             out_dir: the directory the hop set is written to.
@@ -197,14 +198,15 @@ class HopDetector:
         out_dir: Optional[str] = None,
         progress: bool = False,
         force: bool = False,
-        prefix: Optional[str] = None,
     ) -> HopContents:
         """Turn the cuts of the given detector into hop records.
 
         The evidence frame of a hop is the frame the detector cuts at -
-        the first frame of the new content. node, url and summary of the
-        walk stay empty: they come from the transcript and are never
-        guessed from the picture.
+        the first frame of the new content. It is named by its offset in
+        the reel and never by its position in the run - see issue #21 and
+        hop_frame_names. node, url and summary of the walk stay empty:
+        they come from the transcript and are never guessed from the
+        picture.
 
         Args:
             config: the values selecting and parameterizing the detector.
@@ -213,10 +215,6 @@ class HopDetector:
                 writes nothing.
             progress: show the tqdm progress bar while detecting.
             force: overwrite a hop set that is already there.
-            prefix: the artefact name prefix of the evidence frames -
-                the acronym of the Recording where there is one, so a
-                frame traces back to its reel by name alone; the stem of
-                the video file where there is none.
 
         Returns:
             the hops of this run.
@@ -226,18 +224,18 @@ class HopDetector:
                 and force is not given.
         """
         hop_contents = HopContents(recording=self.reel.videoFile)
-        if prefix is None and self.reel.videoFile is not None:
-            prefix = os.path.splitext(self.reel.videoFile)[0]
         if out_dir is not None:
             self.clear(out_dir, force)
             os.makedirs(out_dir, exist_ok=True)
             config.save_to_yaml_file(os.path.join(out_dir, "config.yaml"))
-        for frame_num in self.scenes(config, progress=progress):
+        frame_nums = self.scenes(config, progress=progress)
+        times_sec = [self.reel.time_of(frame_num) for frame_num in frame_nums]
+        names = hop_frame_names(times_sec)
+        for frame_num, name in zip(frame_nums, names):
             frame = self.reel.frame_at(frame_num)
-            pos = len(hop_contents.hops) + 1
             screenshot = None
             if out_dir is not None and frame is not None:
-                screenshot = f"{prefix}-hop{pos:03d}.jpg"
+                screenshot = name
                 frame.save(os.path.join(out_dir, screenshot))
             hop_contents.add(HopContent(time=frame.timecode, screenshot=screenshot))
         if out_dir is not None:

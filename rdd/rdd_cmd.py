@@ -71,11 +71,6 @@ class RddCmd(BaseCmd):
             "-o", "--out", default="hops", help="output directory (default: hops)"
         )
         parser.add_argument(
-            "--prefix",
-            help="artefact name prefix of the evidence frames "
-            "(default: the stem of the video file)",
-        )
-        parser.add_argument(
             "--progress",
             action="store_true",
             help="show the progress bar - a run over a reel takes minutes "
@@ -123,7 +118,6 @@ class RddCmd(BaseCmd):
             out_dir=args.out,
             progress=args.progress,
             force=args.force,
-            prefix=args.prefix,
         )
         if not args.quiet:
             for hop in hops.hops:
