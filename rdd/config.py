@@ -20,6 +20,6 @@ class HopConfig:
     HopDetector.get_detectors.
     """
 
-    detector: str = "Content"
+    detector: str = "Adaptive"
     start_sec: Optional[float] = None
     end_sec: Optional[float] = None

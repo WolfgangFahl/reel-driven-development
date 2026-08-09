@@ -84,8 +84,8 @@ class RddCmd(BaseCmd):
         parser.add_argument(
             "--detector",
             choices=HopDetector.get_detector_names(),
-            default="Content",
-            help="scene detector to find the hops with (default: Content) "
+            default="Adaptive",
+            help="scene detector to find the hops with (default: Adaptive) "
             "- see https://www.scenedetect.com/benchmarks/",
         )
 
