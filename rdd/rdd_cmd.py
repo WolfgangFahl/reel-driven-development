@@ -113,7 +113,9 @@ class RddCmd(BaseCmd):
         reel = Reel(args.video)
         self.detector = HopDetector(reel)
         config = self.get_config(args)
-        hops = self.detector.hops(config, out_dir=args.out, progress=args.progress)
+        hops = self.detector.hops(
+            config, out_dir=args.out, progress=args.progress, force=args.force
+        )
         if not args.quiet:
             for hop in hops.hops:
                 print(f"{hop.pos:3d} {hop.time} {hop.screenshot}", file=sys.stderr)

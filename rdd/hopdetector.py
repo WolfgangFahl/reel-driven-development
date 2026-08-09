@@ -138,11 +138,40 @@ class HopDetector:
             candidates = [int(start.frame_num) for start, _ in scenes]
         return candidates
 
+    def clear(self, out_dir: str, force: bool):
+        """Make sure a hop set is not silently mixed with an older one.
+
+        Frames are named by position in the run, so writing a shorter hop
+        set over a longer one leaves the surplus frames of the older run
+        behind and the directory then shows a hop set that never existed.
+        An existing hop set is therefore kept unless it is replaced whole.
+
+        Args:
+            out_dir: the directory the hop set is written to.
+            force: replace an existing hop set instead of keeping it.
+
+        Raises:
+            ValueError: if a hop set is there and force is not given.
+        """
+        hops_path = os.path.join(out_dir, "hops.yaml")
+        if os.path.isfile(hops_path):
+            if not force:
+                raise ValueError(
+                    f"{hops_path} already holds a hop set - "
+                    f"use --force to replace it"
+                )
+            for name in os.listdir(out_dir):
+                if name in ("hops.yaml", "config.yaml") or (
+                    name.endswith(".jpg") and name.startswith("hop")
+                ):
+                    os.remove(os.path.join(out_dir, name))
+
     def hops(
         self,
         config: HopConfig,
         out_dir: Optional[str] = None,
         progress: bool = False,
+        force: bool = False,
     ) -> HopContents:
         """Turn the cuts of the given detector into hop records.
 
@@ -157,12 +186,18 @@ class HopDetector:
                 config.yaml that reproduces them are written to; None
                 writes nothing.
             progress: show the tqdm progress bar while detecting.
+            force: overwrite a hop set that is already there.
 
         Returns:
             the hops of this run.
+
+        Raises:
+            ValueError: if the output directory already holds a hop set
+                and force is not given.
         """
         hop_contents = HopContents(recording=self.reel.videoFile)
         if out_dir is not None:
+            self.clear(out_dir, force)
             os.makedirs(out_dir, exist_ok=True)
             config.save_to_yaml_file(os.path.join(out_dir, "config.yaml"))
         for frame_num in self.scenes(config, progress=progress):
