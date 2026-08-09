@@ -15,6 +15,8 @@ VENV="${RDD_VENV:-$HOME/.rdd/venv}"
 WCT="$VENV/bin/whisper-ctranslate2"
 YAPSNAP="$VENV/bin/yapsnap"
 MODEL="large-v3"
+DEVICE="cpu"
+FORCE=""
 REEL_LANG=""
 PREFIX=""
 OUT=""
@@ -33,6 +35,9 @@ usage: $0 [-h|--help][--install][--kroko][--whisper][--diarize][--num-speakers <
           [--lang <code>][--model <name>][--prefix <name>][--out <dir>][--glossary <text>] <video>
    -h|--help:            show this help
    --install:            create $VENV and install both transcription engines
+   --device <name>:      cpu or cuda (default: $DEVICE) - auto picks cuda and
+                         fails silently where the CUDA libraries are missing
+   -f|--force:           overwrite an existing transcript
    --kroko:              fast rung - yapsnap with the language matched Kroko model
    --whisper:            quality rung - faster-whisper (default when no rung is given)
    --diarize:            speaker turns via yapsnap - needed for two or more participants
@@ -76,17 +81,14 @@ check_tools() {
 }
 
 #
-# tsv2stamped - turn a whisper tsv into [MM:SS] transcript lines
-#   $1: l_tsv the tsv written by whisper-ctranslate2
-#   $2: l_txt the transcript to write
+# claim - refuse to overwrite an existing artefact unless forced
+#   $1: l_path the artefact to be written
 #
-tsv2stamped() {
-  local l_tsv="$1"
-  local l_txt="$2"
-  awk -F'\t' 'NR>1 { s=int($1/1000); printf "[%02d:%02d] %s\n", int(s/60), s%60, $3 }' \
-    "$l_tsv" > "$l_txt" || error "cannot write $l_txt"
-  rm -f "$l_tsv"
-  success "$(wc -l < "$l_txt") segments in $l_txt"
+claim() {
+  local l_path="$1"
+  if [[ -s "$l_path" && -z "$FORCE" ]]; then
+    error "$l_path exists - use --force to overwrite"
+  fi
 }
 
 #
@@ -99,15 +101,26 @@ run_whisper() {
   local l_video="$1"
   local l_out="$2"
   local l_prefix="$3"
+  local l_txt="$l_out/$l_prefix-transcript-raw.txt"
+  local l_tmp l_tsv
   local -a l_args
-  l_args=("$l_video" --model "$MODEL" --compute_type int8 --vad_filter True
-    --output_format tsv --output_dir "$l_out")
+  claim "$l_txt"
+  l_tmp="$(mktemp -d)" || error "cannot create a temporary directory"
+  l_args=("$l_video" --model "$MODEL" --device "$DEVICE" --compute_type int8
+    --vad_filter True --output_format tsv --output_dir "$l_tmp")
   [[ -n "$REEL_LANG" ]] && l_args+=(--language "$REEL_LANG")
   [[ -n "$GLOSSARY" ]] && l_args+=(--initial_prompt "$GLOSSARY")
-  action "quality rung: faster-whisper $MODEL on $l_video"
-  "$WCT" "${l_args[@]}" || error "faster-whisper failed"
-  tsv2stamped "$l_out/$(basename "${l_video%.*}").tsv" \
-    "$l_out/$l_prefix-transcript-raw.txt"
+  action "quality rung: faster-whisper $MODEL on $DEVICE"
+  # the exit code is not evidence - the tool reports success on a load failure
+  "$WCT" "${l_args[@]}"
+  l_tsv="$(find "$l_tmp" -name '*.tsv' -print -quit)"
+  [[ -s "$l_tsv" ]] || error "faster-whisper produced no transcript"
+  awk -F'\t' 'NR>1 { s=int($1/1000); printf "[%02d:%02d] %s\n", int(s/60), s%60, $3 }' \
+    "$l_tsv" > "$l_tmp/stamped.txt" || error "cannot stamp $l_tsv"
+  [[ -s "$l_tmp/stamped.txt" ]] || error "no segments in $l_tsv"
+  mv "$l_tmp/stamped.txt" "$l_txt" || error "cannot write $l_txt"
+  rm -rf "$l_tmp"
+  success "$(wc -l < "$l_txt") segments in $l_txt"
 }
 
 #
@@ -122,6 +135,7 @@ run_kroko() {
   local l_prefix="$3"
   local l_txt="$l_out/$l_prefix-transcript-kroko.txt"
   local -a l_args
+  claim "$l_txt"
   l_args=("$l_video" --timestamps -o "$l_txt")
   [[ -n "$REEL_LANG" ]] && l_args+=(--lang "$REEL_LANG")
   action "fast rung: yapsnap on $l_video"
@@ -141,6 +155,7 @@ run_diarize() {
   local l_prefix="$3"
   local l_txt="$l_out/$l_prefix-speakers.txt"
   local -a l_args
+  claim "$l_txt"
   l_args=("$l_video" --diarize --speed 1.0 -o "$l_txt")
   [[ -n "$REEL_LANG" ]] && l_args+=(--lang "$REEL_LANG")
   [[ -n "$NUM_SPEAKERS" ]] && l_args+=(--num-speakers "$NUM_SPEAKERS")
@@ -174,6 +189,9 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help) usage ;;
     --install) do_install ;;
+    -f|--force) FORCE="true" ;;
+    --device)
+      if [[ -n "$2" && "$2" != -* ]]; then DEVICE="$2"; shift; else usage; fi ;;
     --kroko)   KROKO="true" ;;
     --whisper) WHISPER="true" ;;
     --diarize) DIARIZE="true" ;;
