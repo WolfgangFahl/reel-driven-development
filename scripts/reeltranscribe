@@ -138,6 +138,8 @@ run_kroko() {
   local l_txt="$l_out/$l_prefix-transcript-kroko.txt"
   local -a l_args
   claim "$l_txt"
+  # yapsnap shells out to ffmpeg - the whisper rung decodes through PyAV and does not
+  autoinstall ffmpeg ffmpeg ffmpeg
   l_args=("$l_video" --timestamps -o "$l_txt")
   [[ -n "$REEL_LANG" ]] && l_args+=(--lang "$REEL_LANG")
   action "fast rung: yapsnap on $l_video"
@@ -158,6 +160,8 @@ run_diarize() {
   local l_txt="$l_out/$l_prefix-speakers.txt"
   local -a l_args
   claim "$l_txt"
+  # yapsnap shells out to ffmpeg - the whisper rung decodes through PyAV and does not
+  autoinstall ffmpeg ffmpeg ffmpeg
   l_args=("$l_video" --diarize --speed 1.0 -o "$l_txt")
   [[ -n "$REEL_LANG" ]] && l_args+=(--lang "$REEL_LANG")
   [[ -n "$NUM_SPEAKERS" ]] && l_args+=(--num-speakers "$NUM_SPEAKERS")
