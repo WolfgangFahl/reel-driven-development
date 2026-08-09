@@ -5,11 +5,11 @@
 
 import argparse
 import sys
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from basemkit.base_cmd import BaseCmd
-from scenedetect import SceneDetector
 
+from rdd.config import HopConfig
 from rdd.frame import Reel
 from rdd.hopdetector import HopDetector
 from rdd.version import Version
@@ -41,14 +41,21 @@ class RddCmd(BaseCmd):
                 time_sec = time_sec * 60.0 + float(part)
         return time_sec
 
-    def get_detectors(self) -> Dict[str, SceneDetector]:
-        """Get the detectors on offer by name.
+    def get_config(self, args: argparse.Namespace) -> HopConfig:
+        """Get the configuration the given arguments select.
+
+        Args:
+            args: parsed argument namespace.
 
         Returns:
-            detector name to detector.
+            the configuration of this run.
         """
-        detectors = dict(HopDetector.get_detectors())
-        return detectors
+        config = HopConfig(
+            detector=args.detector,
+            start_sec=self.time_of(args.start),
+            end_sec=self.time_of(args.end),
+        )
+        return config
 
     def add_arguments(self, parser: argparse.ArgumentParser):
         """Add the hop detection arguments to the given parser.
@@ -69,13 +76,12 @@ class RddCmd(BaseCmd):
             help="show the progress bar - a run over a reel takes minutes "
             "and must not be silent",
         )
-        detectors = self.get_detectors()
         parser.add_argument(
             "--detector",
-            choices=sorted(detectors),
+            choices=HopDetector.get_detector_names(),
             default="Content",
-            help="scene detector to find the hop candidates with "
-            "(default: Content) - see https://www.scenedetect.com/benchmarks/",
+            help="scene detector to find the hops with (default: Content) "
+            "- see https://www.scenedetect.com/benchmarks/",
         )
 
     def handle_args(self, args: argparse.Namespace) -> bool:
@@ -106,16 +112,8 @@ class RddCmd(BaseCmd):
         """
         reel = Reel(args.video)
         self.detector = HopDetector(reel)
-        detector = self.get_detectors()[args.detector]
-        start_sec = self.time_of(args.start)
-        end_sec = self.time_of(args.end)
-        hops = self.detector.hops(
-            detector,
-            out_dir=args.out,
-            start_sec=start_sec,
-            end_sec=end_sec,
-            progress=args.progress,
-        )
+        config = self.get_config(args)
+        hops = self.detector.hops(config, out_dir=args.out, progress=args.progress)
         if not args.quiet:
             for hop in hops.hops:
                 print(f"{hop.pos:3d} {hop.time} {hop.screenshot}", file=sys.stderr)

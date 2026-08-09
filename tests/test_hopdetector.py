@@ -8,6 +8,7 @@ import os
 from basemkit.basetest import Basetest
 from basemkit.profiler import Profiler
 
+from rdd.config import HopConfig
 from rdd.frame import Reel
 from rdd.hopdetector import HopDetector
 
@@ -33,9 +34,9 @@ class TestSceneDetect(Basetest):
         reel = self.get_reel()
         hop_detector = HopDetector(reel)
         cuts = {}
-        for name, detector in HopDetector.get_detectors():
+        for name, _detector in HopDetector.get_detectors():
             profiler = Profiler(name, profile=self.debug)
-            frame_nums = hop_detector.scenes(detector)
+            frame_nums = hop_detector.scenes(HopConfig(detector=name))
             profiler.time(f" - {len(frame_nums)} cuts")
             cuts[name] = frame_nums
             self.assertEqual(sorted(frame_nums), frame_nums)

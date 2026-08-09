@@ -32,121 +32,75 @@ The first tooling milestone is HopDetection - see
 
 ## hopdetect flags
 
-Every parameter that influences the hop set is a flag, and the effective
-parameter set is recorded in `hops.json`, so a run is reproducible from its
-own output ([issue #4](https://github.com/WolfgangFahl/reel-driven-development/issues/4)).
-
 | flag | meaning | default | change it when |
 | --- | --- | --- | --- |
+| `--detector` | the detector to find the hops with, by name | `Content` | comparing detectors, or one detector misses hops on this material |
 | `--start` | segment start (seconds or MM:SS) | 0 | processing a part of the reel |
 | `--end` | segment end (seconds or MM:SS) | video duration | processing a part of the reel |
-| `--target` | transcript-named capture time, repeatable | none | the transcript names a moment that must have an evidence frame or a proven absence |
-| `--out` | output directory for frames and JSON | `hops` | keeping several hop sets apart |
-| `--threshold` | block-MAE change threshold (gray levels) | 12.0 | small UI changes are missed (lower) or noise is detected (raise); choose together with the grid, never independently |
-| `--min-stable` | seconds of stability separating two hops | 1.0 | bursts (scrolling, rendering) split into several hops (raise) or distinct fast hops merge (lower) |
-| `--blocks-x` | block grid columns | 16 | the smallest change area that must stay above threshold is smaller than a block; a finer grid raises the score of a small-area change, so re-check `--threshold` |
-| `--blocks-y` | block grid rows | 9 | see `--blocks-x` |
-| `--granularity` | minimal bisection interval in seconds | one frame | frame-level precision is not needed and sampling cost matters (raise) |
-| `--target-window` | seconds sampled around each transcript target | 5.0 | the narrative anchors are less precise than ±5 s (raise) |
-| `--compare-width` | width frames are downscaled to before comparison | 640 | fine detail decides hops (raise); a block must stay wide enough to average meaningfully: keep `compare_width / blocks_x` well above ~10 pixels |
-| `--prefix` | evidence frame name prefix | `hop` | several walks share one output directory |
-| `--region` | region of interest `x,y,width,height` the change metric is restricted to | full frame | the frame contains a permanently changing area that is not part of the walk |
+| `--out` | output directory for the evidence frames, `hops.yaml` and `config.yaml` | `hops` | keeping several hop sets apart |
+| `--progress` | show the progress bar of the running detection | off | a run over a long reel must not be silent ([issue #6](https://github.com/WolfgangFahl/reel-driven-development/issues/6)) |
 
-### Region of interest
+`hopdetect --help` lists these together with the standard options of
+[pybasemkit](https://github.com/WolfgangFahl/pybasemkit#cli-tooling), and the
+exit code distinguishes success (0), interruption (1) and failure (2).
 
-Block-MAE scores the whole frame by default. A frame area that changes
-permanently without being part of the walk - live participant tiles in a
-conference share, a playing video, a clock, a scrolling log pane - defeats the
-detection: every frame pair "differs", the bisection degenerates into a dense
-frame-by-frame scan, all changes merge into a single hop and proven absence
-becomes unreachable
-([issue #5](https://github.com/WolfgangFahl/reel-driven-development/issues/5)).
+## Detectors
 
-Worked example - a conference screen-share with a live participant tile
-column on the right 11% of a 1920x1080 frame:
+Hop candidates come from [PySceneDetect](https://www.scenedetect.com), whose
+detectors are [benchmarked against a labeled corpus](https://www.scenedetect.com/benchmarks/).
+Our own material is screen recordings rather than film, so those numbers do
+not transfer - but a measured detector is preferred over an unmeasured one of
+our own, and the detector is therefore a parameter and never fixed in the code.
 
-```bash
-hopdetect meeting.mp4 --region 0,0,0.89,1.0 --out hops
-```
+Each detector is on offer at its library default and at half and double its
+threshold, since one setting says nothing about how a detector answers to it.
+Which setting is right can only be decided against a labeled corpus of reels
+with ground-truth hop boundaries; we have none, so these are measurements and
+not claims.
 
-* pixel form `--region 0,0,1708,1080` refers to the native video frame;
-  the fractional form is resolution independent
-* the region applies to the change metric only - evidence frames stay full
-  frames, so the reader always sees the whole picture
-* `hops.json` records the effective (fractional) region: a hop set produced
-  under a region is only interpretable together with it
+`ThresholdDetector` is not on offer: it detects fades to a near-black level,
+which our material of mostly conference recordings does not have.
 
-### Progress bar
+Measured on [examples/genwiki-walk](examples/genwiki-walk) - 1501 frames, 60 s,
+about 1.4 s per run:
 
-`--progress` shows the state of a running detection
-([issue #6](https://github.com/WolfgangFahl/reel-driven-development/issues/6)).
-Phase 1 (anchors and target windows) has a known count and is a determinate
-bar. Phase 2 (bisection) is adaptive - the total amount of work is not known
-when the run starts, so a percentage would be a fabrication: it shows the
-quantities that are actually known - frames sampled, change brackets settled,
-intervals open and the current position in the reel. A final line reports the
-totals, matching `hops.json`. Bars render only on a TTY; redirected output
-stays clean.
+| detector | half | default | double |
+| --- | --- | --- | --- |
+| Adaptive | 32 | 15 | 11 |
+| Content | 17 | 9 | 0 |
+| Hash | 32 | 12 | 0 |
+| Histogram | 13 | 10 | 7 |
 
-### Machine-readable progress
+The spread is the open question, not the result: nothing here can yet say
+which count is closest to the truth.
 
-`--progress-details PATH` writes one JSON object per line (JSONL) as the run
-proceeds, flushed per event; `-` means stderr, so `hops.json` stays separate
-([issue #7](https://github.com/WolfgangFahl/reel-driven-development/issues/7)).
-An agent driving `hopdetect` can abort a degenerate run early and account for
-proven-absence claims at the moment they are made.
+## Output
 
-Every event carries `event` and `t` (wall seconds since run start), plus
-`pos` (position in the reel in seconds) where a position applies. The schema
-is an interface: additive changes only.
+A run writes to `--out`:
 
-| event | fields |
-| --- | --- |
-| `run_start` | `video`, `start`, `end`, `parameters` (the effective parameter set) |
-| `phase` | `phase`: `anchors`, `targets`, `bisection`, `grouping`, `emit`; `total` where the phase has a known count |
-| `sample` | `pos`, `frames` sampled so far, `open` intervals, `brackets` settled so far; rate bounded by `--progress-every` seconds |
-| `bracket` | `pos`, `before`, `after`, `score` |
-| `target` | `pos`, `resolution`: `found` with `time`, or `absent` with `window`, `granularity` and `frames_compared` |
-| `hop` | `pos`, `hop_pos`, `time`, `screenshot` |
-| `run_end` | `frames_sampled`, `brackets`, `groups`, `hops`, `absences`, `status`; `t` is the wall time |
-
-A `target` event with `resolution: absent` is the machine-readable form of a
-proven-absence claim - it carries the window searched and the granularity
-reached at the moment the claim is made.
+* `hopNN.jpg` - the evidence frame of each hop, the full frame as recorded
+* `hops.yaml` - the hop records, whose field names are the property names of
+  [Concept:HopContent](https://contexts.bitplan.com/index.php/Concept:HopContent);
+  `node`, `url` and `summary` stay empty because they come from the transcript
+  and are never guessed from the picture
+* `config.yaml` - the values that decided this hop set, so a run can be
+  repeated from its own output
+  ([issue #4](https://github.com/WolfgangFahl/reel-driven-development/issues/4))
 
 ## Example: GenWiki walk
 
-Acceptance run on the [test video](https://www.youtube.com/watch?v=gVxk-zRb0wQ)
-segment 20:00-21:00 - a walk through wiki.genealogy.net category pages:
-
 ```bash
-hopdetect ~/.rdd/cache/gVxk-zRb0wQ.mp4 --start 20:00 --end 21:00 --out hops
-12 hops from 786 sampled frames -> hops/hops.json
+hopdetect examples/genwiki-walk/genwiki-walk.mp4 --detector Content --out hops
+genwiki-walk.mp4: 9 hops from Content over 1501 frames -> hops
 ```
 
-Raw results in [examples/genwiki-walk](examples/genwiki-walk). Of the 12
-detected hops, 9 are distinct content states of the walk (hop numbers kept as
-in hops.json):
+Raw results of an earlier run in [examples/genwiki-walk](examples/genwiki-walk).
 
-| hop | time | changes grouped | content | frame |
-| --- | --- | --- | --- | --- |
-| hop01 | 20:02 | 32 | Kategorie:PDF | <img src="examples/genwiki-walk/hop01.jpg" width="360"> |
-| hop02 | 20:06 | 11 | Kategorie:PDF, media section | <img src="examples/genwiki-walk/hop02.jpg" width="360"> |
-| hop03 | 20:10 | 24 | file page with PDF viewer (Todfall-Rodel Kloster Salem) | <img src="examples/genwiki-walk/hop03.jpg" width="360"> |
-| hop04 | 20:20 | 94 | presentation slide with category links | <img src="examples/genwiki-walk/hop04.jpg" width="360"> |
-| hop05 | 20:28 | 57 | Kategorie:Icons, media section | <img src="examples/genwiki-walk/hop05.jpg" width="360"> |
-| hop06 | 20:34 | 40 | Kategorie:Icons | <img src="examples/genwiki-walk/hop06.jpg" width="360"> |
-| hop07 | 20:37 | 2 | Kategorie:Portal icons | <img src="examples/genwiki-walk/hop07.jpg" width="360"> |
-| hop10 | 20:47 | 2 | presentation slide revisited | <img src="examples/genwiki-walk/hop10.jpg" width="360"> |
-| hop12 | 20:59 | 73 | Kategorie:SVG, flags gallery | <img src="examples/genwiki-walk/hop12.jpg" width="360"> |
+## Known gaps
 
-### False positives
-
-Three detections are not content states of the walk - kept in the example as
-tool findings:
-
-| hop | time | reason |
-| --- | --- | --- |
-| hop08 | 20:41 | cursor-motion burst on the unchanged Kategorie:Portal icons page |
-| hop09 | 20:45 | transient browser tab-hover preview overlay, page unchanged |
-| hop11 | 20:50 | blank frame: Kategorie:SVG captured before rendering; the settled state is hop12 |
+* content outside the walk - participant tiles, a clock, a playing video -
+  can still decide hop boundaries
+  ([issue #5](https://github.com/WolfgangFahl/reel-driven-development/issues/5))
+* there is no machine-readable progress stream for an agent driving a run
+  ([issue #7](https://github.com/WolfgangFahl/reel-driven-development/issues/7))
+* transcript-anchored capture of a named moment is not implemented

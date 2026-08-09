@@ -17,6 +17,7 @@ from scenedetect import (
     detect,
 )
 
+from rdd.config import HopConfig
 from rdd.frame import Reel
 from rdd.recording import HopContent, HopContents
 
@@ -34,7 +35,16 @@ class HopDetector:
 
     @classmethod
     def get_detectors(cls) -> Generator[Tuple[str, SceneDetector], None, None]:
-        """Get the scene detectors on offer.
+        """Get the detectors on offer.
+
+        A detector at one threshold says nothing about how it answers to
+        that threshold, so each is offered around its library default.
+        Which value is right can only be decided against a labeled corpus
+        - until we have one these are measurements, not claims.
+
+        ThresholdDetector is not on offer: it detects fades to a
+        near-black level, which our material of mostly zoom recordings
+        does not have.
 
         The detectors and their measured quality are documented at
         https://www.scenedetect.com/benchmarks/
@@ -42,23 +52,55 @@ class HopDetector:
         Yields:
             the name of the detector and the detector itself
         """
+        yield "Adaptive 1.5", AdaptiveDetector(adaptive_threshold=1.5)
         yield "Adaptive", AdaptiveDetector()
+        yield "Adaptive 6", AdaptiveDetector(adaptive_threshold=6.0)
+        yield "Content 13.5", ContentDetector(threshold=13.5)
         yield "Content", ContentDetector()
+        yield "Content 54", ContentDetector(threshold=54.0)
+        yield "Hash 0.2", HashDetector(threshold=0.2)
         yield "Hash", HashDetector()
+        yield "Hash 0.79", HashDetector(threshold=0.79)
+        yield "Histogram 0.025", HistogramDetector(threshold=0.025)
         yield "Histogram", HistogramDetector()
-        # the threshold is an 8-bit intensity level every channel must fall
-        # below to count as a fade; the library documents it as chosen after
-        # the minimum grey/black level of the material - 12 is its default
-        # not useable for our material of mostly zoom recordings
-        # yield "Threshold 12",ThresholdDetector(threshold=12)
-        # yield "Threshold 32",ThresholdDetector(threshold=32)
-        # yield "Threshold 64",ThresholdDetector(threshold=64)
+        yield "Histogram 0.1", HistogramDetector(threshold=0.1)
+
+    @classmethod
+    def get_detector_names(cls) -> List[str]:
+        """Get the names the detectors are on offer under.
+
+        Returns:
+            the names, in the order they are offered.
+        """
+        names = [name for name, _detector in cls.get_detectors()]
+        return names
+
+    def get_detector(self, config: HopConfig) -> SceneDetector:
+        """Get the detector the given configuration names.
+
+        Args:
+            config: the configuration naming the detector.
+
+        Returns:
+            the detector on offer under that name.
+
+        Raises:
+            ValueError: if the named detector is not on offer.
+        """
+        detector = None
+        for name, candidate in self.get_detectors():
+            if name == config.detector:
+                detector = candidate
+        if detector is None:
+            raise ValueError(
+                f"detector {config.detector} is not on offer - "
+                f"choose one of {self.get_detector_names()}"
+            )
+        return detector
 
     def scenes(
         self,
-        detector: SceneDetector,
-        start_sec: Optional[float] = None,
-        end_sec: Optional[float] = None,
+        config: HopConfig,
         progress: bool = False,
     ) -> List[int]:
         """Candidate hop positions from the given scene detector.
@@ -71,11 +113,10 @@ class HopDetector:
         See https://www.scenedetect.com/benchmarks/
 
         Args:
-            detector: the scene detector to run over the reel.
-            start_sec: start of the segment; None starts at the beginning.
-            end_sec: end of the segment; None runs to one frame before the
-                end, since the opencv backend fails on the last frame of
-                some files with an undefined timestamp.
+            config: the values selecting and parameterizing the detector;
+                end_sec None runs to one frame before the end, since the
+                opencv backend fails on the last frame of some files with
+                an undefined timestamp.
             progress: show the tqdm progress bar of the library - a run
                 over a reel takes minutes and must not be silent.
 
@@ -84,12 +125,13 @@ class HopDetector:
         """
         candidates: List[int] = []
         if self.reel.path is not None:
+            end_sec = config.end_sec
             if end_sec is None:
                 end_sec = self.reel.duration_sec - 1.0 / self.reel.fps
             scenes = detect(
                 self.reel.path,
-                detector,
-                start_time=start_sec,
+                self.get_detector(config),
+                start_time=config.start_sec,
                 end_time=end_sec,
                 show_progress=progress,
             )
@@ -98,10 +140,8 @@ class HopDetector:
 
     def hops(
         self,
-        detector: SceneDetector,
+        config: HopConfig,
         out_dir: Optional[str] = None,
-        start_sec: Optional[float] = None,
-        end_sec: Optional[float] = None,
         progress: bool = False,
     ) -> HopContents:
         """Turn the cuts of the given detector into hop records.
@@ -112,11 +152,10 @@ class HopDetector:
         guessed from the picture.
 
         Args:
-            detector: the scene detector to find the hops with.
-            out_dir: directory the evidence frames and hops.yaml are
-                written to; None writes nothing.
-            start_sec: start of the segment; None starts at the beginning.
-            end_sec: end of the segment; None runs to the end.
+            config: the values selecting and parameterizing the detector.
+            out_dir: directory the evidence frames, hops.yaml and the
+                config.yaml that reproduces them are written to; None
+                writes nothing.
             progress: show the tqdm progress bar while detecting.
 
         Returns:
@@ -125,9 +164,8 @@ class HopDetector:
         hop_contents = HopContents(recording=self.reel.videoFile)
         if out_dir is not None:
             os.makedirs(out_dir, exist_ok=True)
-        for frame_num in self.scenes(
-            detector, start_sec=start_sec, end_sec=end_sec, progress=progress
-        ):
+            config.save_to_yaml_file(os.path.join(out_dir, "config.yaml"))
+        for frame_num in self.scenes(config, progress=progress):
             frame = self.reel.frame_at(frame_num)
             pos = len(hop_contents.hops) + 1
             screenshot = None
