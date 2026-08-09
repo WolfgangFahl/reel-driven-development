@@ -1,0 +1,195 @@
+#!/bin/bash
+# WF 2026-08-09
+# transcribe a reel with the two transcription rungs of Reel Driven Development
+# https://wiki.bitplan.com/index.php/Reel_Driven_Development
+# see https://github.com/WolfgangFahl/reel-driven-development/issues/15
+
+if ! type success &>/dev/null; then
+  source "$HOME/source/bash/mp/bash_messages" || {
+    echo "Error: bash_messages not found" >&2
+    exit 1
+  }
+fi
+
+VENV="${RDD_VENV:-$HOME/.rdd/venv}"
+WCT="$VENV/bin/whisper-ctranslate2"
+YAPSNAP="$VENV/bin/yapsnap"
+MODEL="large-v3"
+REEL_LANG=""
+PREFIX=""
+OUT=""
+GLOSSARY=""
+NUM_SPEAKERS=""
+KROKO=""
+WHISPER=""
+DIARIZE=""
+
+#
+# usage - show help
+#
+usage() {
+  cat << EOF
+usage: $0 [-h|--help][--install][--kroko][--whisper][--diarize][--num-speakers <n>]
+          [--lang <code>][--model <name>][--prefix <name>][--out <dir>][--glossary <text>] <video>
+   -h|--help:            show this help
+   --install:            create $VENV and install both transcription engines
+   --kroko:              fast rung - yapsnap with the language matched Kroko model
+   --whisper:            quality rung - faster-whisper (default when no rung is given)
+   --diarize:            speaker turns via yapsnap - needed for two or more participants
+   --num-speakers <n>:   number of speakers for the diarization
+   --lang <code>:        spoken language e.g. de, en, fr
+   --model <name>:       faster-whisper model (default: $MODEL)
+   --prefix <name>:      artefact name prefix (default: the video file stem)
+   --out <dir>:          output directory (default: the directory of the video)
+   --glossary <text>:    domain terms biasing the decoder (initial_prompt)
+   video:                the reel to transcribe
+   artefacts are written beside the reel, each carrying the prefix:
+     <prefix>-transcript-raw.txt    quality rung, [MM:SS] lines
+     <prefix>-transcript-kroko.txt  fast rung, [MM:SS] lines
+     <prefix>-speakers.txt          diarized turns
+   the venv is created and filled on first use - RDD_VENV overrides its path
+EOF
+  exit 1
+}
+
+#
+# do_install - create the venv and install both transcription engines
+#
+do_install() {
+  command -v python3 >/dev/null || error "python3 required"
+  if [[ ! -d "$VENV" ]]; then
+    action "creating $VENV"
+    python3 -m venv "$VENV" || error "cannot create $VENV"
+  fi
+  action "installing whisper-ctranslate2 and yapsnap into $VENV"
+  "$VENV/bin/pip" install -q -U whisper-ctranslate2 yapsnap || error "install failed"
+  success "installed $("$WCT" --version 2>&1 | head -1)"
+}
+
+#
+# check_tools - make sure the engines are there, installing them when not
+#
+check_tools() {
+  # no ffmpeg binary needed - faster-whisper decodes the reel through PyAV
+  command -v awk >/dev/null || error "awk required"
+  [[ -x "$WCT" && -x "$YAPSNAP" ]] || do_install
+}
+
+#
+# tsv2stamped - turn a whisper tsv into [MM:SS] transcript lines
+#   $1: l_tsv the tsv written by whisper-ctranslate2
+#   $2: l_txt the transcript to write
+#
+tsv2stamped() {
+  local l_tsv="$1"
+  local l_txt="$2"
+  awk -F'\t' 'NR>1 { s=int($1/1000); printf "[%02d:%02d] %s\n", int(s/60), s%60, $3 }' \
+    "$l_tsv" > "$l_txt" || error "cannot write $l_txt"
+  rm -f "$l_tsv"
+  success "$(wc -l < "$l_txt") segments in $l_txt"
+}
+
+#
+# run_whisper - quality rung, faster-whisper via whisper-ctranslate2
+#   $1: l_video the reel
+#   $2: l_out the output directory
+#   $3: l_prefix the artefact name prefix
+#
+run_whisper() {
+  local l_video="$1"
+  local l_out="$2"
+  local l_prefix="$3"
+  local -a l_args
+  l_args=("$l_video" --model "$MODEL" --compute_type int8 --vad_filter True
+    --output_format tsv --output_dir "$l_out")
+  [[ -n "$REEL_LANG" ]] && l_args+=(--language "$REEL_LANG")
+  [[ -n "$GLOSSARY" ]] && l_args+=(--initial_prompt "$GLOSSARY")
+  action "quality rung: faster-whisper $MODEL on $l_video"
+  "$WCT" "${l_args[@]}" || error "faster-whisper failed"
+  tsv2stamped "$l_out/$(basename "${l_video%.*}").tsv" \
+    "$l_out/$l_prefix-transcript-raw.txt"
+}
+
+#
+# run_kroko - fast rung, yapsnap with the language matched Kroko model
+#   $1: l_video the reel
+#   $2: l_out the output directory
+#   $3: l_prefix the artefact name prefix
+#
+run_kroko() {
+  local l_video="$1"
+  local l_out="$2"
+  local l_prefix="$3"
+  local l_txt="$l_out/$l_prefix-transcript-kroko.txt"
+  local -a l_args
+  l_args=("$l_video" --timestamps -o "$l_txt")
+  [[ -n "$REEL_LANG" ]] && l_args+=(--lang "$REEL_LANG")
+  action "fast rung: yapsnap on $l_video"
+  "$YAPSNAP" "${l_args[@]}" || error "yapsnap failed"
+  success "$(wc -l < "$l_txt") lines in $l_txt"
+}
+
+#
+# run_diarize - speaker turns via yapsnap
+#   $1: l_video the reel
+#   $2: l_out the output directory
+#   $3: l_prefix the artefact name prefix
+#
+run_diarize() {
+  local l_video="$1"
+  local l_out="$2"
+  local l_prefix="$3"
+  local l_txt="$l_out/$l_prefix-speakers.txt"
+  local -a l_args
+  l_args=("$l_video" --diarize --speed 1.0 -o "$l_txt")
+  [[ -n "$REEL_LANG" ]] && l_args+=(--lang "$REEL_LANG")
+  [[ -n "$NUM_SPEAKERS" ]] && l_args+=(--num-speakers "$NUM_SPEAKERS")
+  action "diarization: yapsnap on $l_video"
+  "$YAPSNAP" "${l_args[@]}" || error "diarization failed"
+  success "speaker turns in $l_txt"
+}
+
+#
+# transcribe - run the selected rungs on one reel
+#   $1: l_video the reel to transcribe
+#
+transcribe() {
+  local l_video="$1"
+  local l_out l_prefix
+  [[ -f "$l_video" ]] || error "no such reel: $l_video"
+  check_tools
+  l_prefix="${PREFIX:-$(basename "${l_video%.*}")}"
+  l_out="${OUT:-$(dirname "$l_video")}"
+  # no rung selected -> the quality rung
+  [[ -z "$KROKO$WHISPER$DIARIZE" ]] && WHISPER="true"
+  [[ -n "$KROKO" ]] && run_kroko "$l_video" "$l_out" "$l_prefix"
+  [[ -n "$WHISPER" ]] && run_whisper "$l_video" "$l_out" "$l_prefix"
+  [[ -n "$DIARIZE" ]] && run_diarize "$l_video" "$l_out" "$l_prefix"
+}
+
+# no arguments -> usage
+[[ $# -eq 0 ]] && usage
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage ;;
+    --install) do_install ;;
+    --kroko)   KROKO="true" ;;
+    --whisper) WHISPER="true" ;;
+    --diarize) DIARIZE="true" ;;
+    --num-speakers)
+      if [[ -n "$2" && "$2" != -* ]]; then NUM_SPEAKERS="$2"; shift; else usage; fi ;;
+    --lang)
+      if [[ -n "$2" && "$2" != -* ]]; then REEL_LANG="$2"; shift; else usage; fi ;;
+    --model)
+      if [[ -n "$2" && "$2" != -* ]]; then MODEL="$2"; shift; else usage; fi ;;
+    --prefix)
+      if [[ -n "$2" && "$2" != -* ]]; then PREFIX="$2"; shift; else usage; fi ;;
+    --out)
+      if [[ -n "$2" && "$2" != -* ]]; then OUT="$2"; shift; else usage; fi ;;
+    --glossary)
+      if [[ -n "$2" && "$2" != -* ]]; then GLOSSARY="$2"; shift; else usage; fi ;;
+    *) transcribe "$1" ;;
+  esac
+  shift
+done
