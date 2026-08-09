@@ -12,7 +12,7 @@ from typing import List, Optional, Tuple
 
 import cv2
 import numpy as np
-from scenedetect import ContentDetector, detect, open_video
+from scenedetect import open_video
 
 from rdd.recording import Recording
 
@@ -121,8 +121,13 @@ class Reel(Recording):
                 stream, as used by tests and by synthetic frames.
             fps: frames per second; read from the video when a path is
                 given, otherwise as given here and None where unknown.
+
+        Raises:
+            FileNotFoundError: if a path is given that holds no video file.
         """
         super().__init__()
+        if path is not None and not os.path.isfile(path):
+            raise FileNotFoundError(f"reel {path} not found in {os.getcwd()}")
         self.path = path
         self.videoFile = os.path.basename(path) if path else None
         self.stream = None
@@ -213,43 +218,6 @@ class Reel(Recording):
             except (OSError, subprocess.CalledProcessError, ValueError):
                 keyframes = []
         return keyframes
-
-    def scene_candidates(
-        self,
-        threshold: float = 27.0,
-        start_sec: Optional[float] = None,
-        end_sec: Optional[float] = None,
-    ) -> List[int]:
-        """Candidate hop positions from the built-in scene detector.
-
-        The library's own content detector reduces each frame to a single
-        global score. It is offered here as an alternative source of
-        candidates and as the baseline the bisection is compared against -
-        in cost as well as in what it finds.
-
-        Args:
-            threshold: the content detector threshold.
-            start_sec: start of the segment; None starts at the beginning.
-            end_sec: end of the segment; None runs to one frame before the
-                end, since the opencv backend fails on the last frame of
-                some files with an undefined timestamp.
-
-        Returns:
-            the frame numbers where the built-in detector cuts, empty
-            without a video.
-        """
-        candidates: List[int] = []
-        if self.path is not None:
-            if end_sec is None:
-                end_sec = self.duration_sec - 1.0 / self.fps
-            scenes = detect(
-                self.path,
-                ContentDetector(threshold=threshold),
-                start_time=start_sec,
-                end_time=end_sec,
-            )
-            candidates = [int(start.frame_num) for start, _ in scenes]
-        return candidates
 
     def frame_at(self, frame_num: int) -> Optional["Frame"]:
         """Read the frame at the given position.
@@ -451,100 +419,3 @@ class Frame:
         """
         written = cv2.imwrite(path, self._img)
         return written
-
-
-class FrameChange:
-    """The criterion deciding whether two frames show different content.
-
-    A single scalar computed over the whole frame hides small-area
-    changes such as a dropdown (2-8% of the frame) or a highlighted
-    option (<1%). Scoring a grid of blocks instead keeps such a change
-    above threshold in its own block, so a change confined to a small
-    part of the screen still counts - see issue #1.
-
-    The score of two frames is the largest of its block scores: zero for
-    identical frames, growing with the amount of change. How a block score
-    is computed is private to this module; a caller reads the scale off
-    measured scores, never off a formula.
-    """
-
-    def __init__(
-        self,
-        blocks_x: int = 16,
-        blocks_y: int = 9,
-        threshold: float = 12.0,
-        region: Optional[Region] = None,
-    ):
-        """Initialize the block grid, change threshold and region.
-
-        Args:
-            blocks_x: number of block columns.
-            blocks_y: number of block rows.
-            threshold: minimum block score counting as change, on the
-                scale of score().
-            region: region of interest the comparison is restricted to;
-                defaults to the full frame.
-        """
-        self.blocks_x = blocks_x
-        self.blocks_y = blocks_y
-        self.threshold = threshold
-        self.region = region
-
-    def block_scores(self, frame_a: Frame, frame_b: Frame) -> np.ndarray:
-        """Compute the score of every block of the grid.
-
-        Args:
-            frame_a: first frame.
-            frame_b: second frame of the same size.
-
-        Returns:
-            blocks_y x blocks_x array of block scores.
-
-        Raises:
-            ValueError: if the compared area is smaller than the block grid.
-        """
-        diff = np.abs(frame_a.crop(self.region)._gray - frame_b.crop(self.region)._gray)
-        height, width = diff.shape
-        if height < self.blocks_y or width < self.blocks_x:
-            raise ValueError(
-                f"region {width}x{height} is smaller than the "
-                f"{self.blocks_x}x{self.blocks_y} block grid"
-            )
-        height_c = (height // self.blocks_y) * self.blocks_y
-        width_c = (width // self.blocks_x) * self.blocks_x
-        diff = diff[:height_c, :width_c]
-        blocks = diff.reshape(
-            self.blocks_y,
-            height_c // self.blocks_y,
-            self.blocks_x,
-            width_c // self.blocks_x,
-        )
-        scores = blocks.mean(axis=(1, 3))
-        return scores
-
-    def score(self, frame_a: Frame, frame_b: Frame) -> float:
-        """Compute how much the content changed between two frames.
-
-        Args:
-            frame_a: first frame.
-            frame_b: second frame of the same size.
-
-        Returns:
-            the largest block score.
-        """
-        scores = self.block_scores(frame_a, frame_b)
-        max_score = float(scores.max())
-        return max_score
-
-    def changed(self, frame_a: Frame, frame_b: Frame) -> bool:
-        """Decide whether the content changed between two frames.
-
-        Args:
-            frame_a: first frame.
-            frame_b: second frame of the same size.
-
-        Returns:
-            True if the score reaches the threshold.
-        """
-        is_changed = self.score(frame_a, frame_b) >= self.threshold
-        return is_changed

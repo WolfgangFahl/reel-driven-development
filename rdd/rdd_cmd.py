@@ -4,15 +4,14 @@
 """
 
 import argparse
-import os
 import sys
-import time
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from basemkit.base_cmd import BaseCmd
+from scenedetect import SceneDetector
 
 from rdd.frame import Reel
-from rdd.hopdetect import BisectionHopDetector, Finding
+from rdd.hopdetector import HopDetector
 from rdd.version import Version
 
 
@@ -42,6 +41,15 @@ class RddCmd(BaseCmd):
                 time_sec = time_sec * 60.0 + float(part)
         return time_sec
 
+    def get_detectors(self) -> Dict[str, SceneDetector]:
+        """Get the detectors on offer by name.
+
+        Returns:
+            detector name to detector.
+        """
+        detectors = dict(HopDetector.get_detectors())
+        return detectors
+
     def add_arguments(self, parser: argparse.ArgumentParser):
         """Add the hop detection arguments to the given parser.
 
@@ -57,21 +65,17 @@ class RddCmd(BaseCmd):
         )
         parser.add_argument(
             "--progress",
-            nargs="?",
-            type=float,
-            const=1.0,
-            default=None,
-            help="report progress on stderr every n wall clock seconds "
-            "(default: 1.0 when given without a value)",
+            action="store_true",
+            help="show the progress bar - a run over a reel takes minutes "
+            "and must not be silent",
         )
+        detectors = self.get_detectors()
         parser.add_argument(
-            "--no-bar", action="store_true", help="suppress the progress bar"
-        )
-        parser.add_argument(
-            "--settle",
-            type=float,
-            default=1.0,
-            help="seconds without change that end a hop (default: 1.0)",
+            "--detector",
+            choices=sorted(detectors),
+            default="Content",
+            help="scene detector to find the hop candidates with "
+            "(default: Content) - see https://www.scenedetect.com/benchmarks/",
         )
 
     def handle_args(self, args: argparse.Namespace) -> bool:
@@ -94,22 +98,6 @@ class RddCmd(BaseCmd):
             handled = True
         return handled
 
-    def show(self, finding: Finding):
-        """Show a finding on stderr as it is made.
-
-        Args:
-            finding: the finding to show.
-        """
-        coverage = self.detector.coverage
-        print(
-            f"{finding.kind:9s} {finding.start_sec:8.2f}-{finding.end_sec:8.2f}s "
-            f"score {finding.score:6.1f} | "
-            f"{coverage.frames_read:5d} frames read, "
-            f"{coverage.brackets:4d} brackets, "
-            f"{coverage.fraction:5.1%} resolved",
-            file=sys.stderr,
-        )
-
     def detect(self, args: argparse.Namespace):
         """Run the hop detection on the given arguments.
 
@@ -117,21 +105,23 @@ class RddCmd(BaseCmd):
             args: parsed argument namespace.
         """
         reel = Reel(args.video)
-        on_finding = None if args.quiet else self.show
-        self.detector = BisectionHopDetector(reel, on_finding=on_finding)
-        started = time.time()
-        start_sec = self.time_of(args.start) or 0.0
+        self.detector = HopDetector(reel)
+        detector = self.get_detectors()[args.detector]
+        start_sec = self.time_of(args.start)
         end_sec = self.time_of(args.end)
-        brackets = self.detector.detect(start_sec=start_sec, end_sec=end_sec)
-        hops = self.detector.hops(settle_sec=args.settle, out_dir=args.out)
-        yaml_path = os.path.join(args.out, "hops.yaml")
-        hops.save_to_yaml_file(yaml_path)
-        coverage = self.detector.coverage
+        hops = self.detector.hops(
+            detector,
+            out_dir=args.out,
+            start_sec=start_sec,
+            end_sec=end_sec,
+            progress=args.progress,
+        )
+        if not args.quiet:
+            for hop in hops.hops:
+                print(f"{hop.pos:3d} {hop.time} {hop.screenshot}", file=sys.stderr)
         print(
-            f"{reel.videoFile}: {hops.hopCount} hops from {len(brackets)} brackets, "
-            f"{coverage.frames_read} of {reel.frame_count} frames read, "
-            f"{coverage.fraction:.1%} of {coverage.total_sec:.1f}s resolved "
-            f"in {time.time() - started:.1f}s -> {yaml_path}"
+            f"{reel.videoFile}: {hops.hopCount} hops "
+            f"from {args.detector} over {reel.frame_count} frames -> {args.out}"
         )
 
 

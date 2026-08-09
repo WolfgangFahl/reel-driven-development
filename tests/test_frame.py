@@ -5,15 +5,14 @@
 
 from basemkit.basetest import Basetest
 
-from rdd.frame import Frame, FrameChange, Region
+from rdd.frame import Frame, Region
 
 
 class TestFrame(Basetest):
-    """Test the frame abstraction and the frame change criterion."""
+    """Test the frame abstraction."""
 
     def setUp(self, debug=False, profile=True):
         Basetest.setUp(self, debug=debug, profile=profile)
-        self.frame_change = FrameChange()
 
     def test_frame_geometry_and_timecode(self):
         """A frame must know its size and its position in the reel."""
@@ -32,27 +31,6 @@ class TestFrame(Basetest):
         self.assertTrue(frame.is_blank())
         self.assertFalse(frame.with_rect(10, 20, 10, 20, 255).is_blank())
 
-    def test_identical_frames(self):
-        """Identical frames must score zero and report no change."""
-        frame = Frame.make()
-        self.assertEqual(0.0, self.frame_change.score(frame, frame))
-        self.assertFalse(self.frame_change.changed(frame, frame))
-
-    def test_localized_change(self):
-        """A dropdown-sized change must be detected although the global mean
-        stays far below the threshold."""
-        frame_a = Frame.make()
-        frame_b = frame_a.with_rect(100, 180, 200, 400, 255)  # ~1.7% of the frame
-        global_change = FrameChange(blocks_x=1, blocks_y=1)
-        global_score = global_change.score(frame_a, frame_b)
-        self.assertLess(global_score, self.frame_change.threshold)
-        self.assertTrue(self.frame_change.changed(frame_a, frame_b))
-        if self.debug:
-            print(
-                f"global {global_score:.2f} vs "
-                f"block {self.frame_change.score(frame_a, frame_b):.2f}"
-            )
-
     def test_region_bounds(self):
         """Issue #5: pixel and fractional regions must map to the same crop
         bounds on the native frame."""
@@ -69,26 +47,11 @@ class TestFrame(Basetest):
         with self.assertRaises(ValueError):
             Region.of_str("0,0,1")
 
-    def test_region_restricts_scoring(self):
-        """Issue #5: a change outside the region must not score; the same
-        change inside the full frame must."""
-        frame_a = Frame.make()
-        frame_b = frame_a.with_rect(0, 80, 1200, 1280, 255)  # top-right corner tile
-        self.assertTrue(self.frame_change.changed(frame_a, frame_b))
-        region_change = FrameChange(region=Region(0.0, 0.0, 0.875, 1.0))
-        self.assertFalse(region_change.changed(frame_a, frame_b))
-        self.assertEqual(0.0, region_change.score(frame_a, frame_b))
-
-    def test_region_smaller_than_grid(self):
-        """A region smaller than the block grid must raise instead of failing
-        silently."""
-        region_change = FrameChange(region=Region(0, 0, 8, 4))
+    def test_crop_to_region(self):
+        """Issue #5: cropping to a region must answer a frame of the region
+        size."""
         frame = Frame.make()
-        with self.assertRaises(ValueError):
-            region_change.score(frame, frame)
-
-    def test_color_frames(self):
-        """The criterion must accept 3-channel color frames."""
-        frame_a = Frame.make(width=640, height=360, value=0, channels=3)
-        frame_b = frame_a.with_rect(0, 40, 0, 80, 200)
-        self.assertTrue(self.frame_change.changed(frame_a, frame_b))
+        cropped = frame.crop(Region(0.0, 0.0, 0.875, 1.0))
+        self.assertEqual(1120, cropped.width)
+        self.assertEqual(frame.height, cropped.height)
+        self.assertEqual(frame, frame.crop(None))
