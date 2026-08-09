@@ -6,6 +6,7 @@ hop detector over a reel
 """
 
 import os
+from datetime import datetime
 from typing import Generator, List, Optional, Tuple
 
 from scenedetect import (
@@ -19,7 +20,9 @@ from scenedetect import (
 
 from rdd.config import HopConfig
 from rdd.frame import Reel
-from rdd.recording import HopContent, HopContents
+from rdd.hopset import HopSet
+from rdd.recording import HopContent, HopContents, Recording
+from rdd.version import Version
 
 
 class HopDetector:
@@ -160,11 +163,33 @@ class HopDetector:
                     f"{hops_path} already holds a hop set - "
                     f"use --force to replace it"
                 )
-            for name in os.listdir(out_dir):
-                if name in ("hops.yaml", "config.yaml") or (
-                    name.endswith(".jpg") and name.startswith("hop")
-                ):
-                    os.remove(os.path.join(out_dir, name))
+            old = HopSet.load_from_yaml_file(hops_path)
+            for hop in old.hops:
+                if hop.screenshot:
+                    frame_path = os.path.join(out_dir, hop.screenshot)
+                    if os.path.isfile(frame_path):
+                        os.remove(frame_path)
+            for name in ("hops.yaml", "config.yaml"):
+                name_path = os.path.join(out_dir, name)
+                if os.path.isfile(name_path):
+                    os.remove(name_path)
+
+    def recording_of(self, hop_count: int) -> Recording:
+        """The Recording record of the reel this run analyzed.
+
+        Args:
+            hop_count: the number of hops found.
+
+        Returns:
+            the Recording, with the fields the reel itself can answer;
+            the fields that come from the graph stay unset.
+        """
+        recording = Recording(
+            videoFile=self.reel.videoFile,
+            durationMin=round(self.reel.duration_sec / 60.0, 1),
+            hopCount=hop_count,
+        )
+        return recording
 
     def hops(
         self,
@@ -172,6 +197,7 @@ class HopDetector:
         out_dir: Optional[str] = None,
         progress: bool = False,
         force: bool = False,
+        prefix: Optional[str] = None,
     ) -> HopContents:
         """Turn the cuts of the given detector into hop records.
 
@@ -187,6 +213,10 @@ class HopDetector:
                 writes nothing.
             progress: show the tqdm progress bar while detecting.
             force: overwrite a hop set that is already there.
+            prefix: the artefact name prefix of the evidence frames -
+                the acronym of the Recording where there is one, so a
+                frame traces back to its reel by name alone; the stem of
+                the video file where there is none.
 
         Returns:
             the hops of this run.
@@ -196,6 +226,8 @@ class HopDetector:
                 and force is not given.
         """
         hop_contents = HopContents(recording=self.reel.videoFile)
+        if prefix is None and self.reel.videoFile is not None:
+            prefix = os.path.splitext(self.reel.videoFile)[0]
         if out_dir is not None:
             self.clear(out_dir, force)
             os.makedirs(out_dir, exist_ok=True)
@@ -205,9 +237,18 @@ class HopDetector:
             pos = len(hop_contents.hops) + 1
             screenshot = None
             if out_dir is not None and frame is not None:
-                screenshot = f"hop{pos:02d}.jpg"
+                screenshot = f"{prefix}-hop{pos:03d}.jpg"
                 frame.save(os.path.join(out_dir, screenshot))
             hop_contents.add(HopContent(time=frame.timecode, screenshot=screenshot))
         if out_dir is not None:
-            hop_contents.save_to_yaml_file(os.path.join(out_dir, "hops.yaml"))
+            hop_set = HopSet(
+                recording=self.recording_of(hop_contents.hopCount),
+                config=config,
+                hops=hop_contents.hops,
+            )
+            hop_set.save(
+                os.path.join(out_dir, "hops.yaml"),
+                version=Version.version,
+                date=datetime.now().strftime("%Y-%m-%d"),
+            )
         return hop_contents

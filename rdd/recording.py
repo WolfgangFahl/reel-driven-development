@@ -26,9 +26,14 @@ class Recording:
     A Recording is the record of a video, not the video itself; reading
     pictures from the file is the business of the specialization in
     rdd.frame.
+
+    The acronym is the short ASCII identifier every artefact of this
+    Recording carries as its name prefix, so an artefact can be traced
+    back to its Recording by name alone.
     """
 
     name: Optional[str] = None
+    acronym: Optional[str] = None
     date: Optional[str] = None
     durationMin: Optional[float] = None
     videoFile: Optional[str] = None
