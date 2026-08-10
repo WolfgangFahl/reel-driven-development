@@ -34,6 +34,7 @@ LABELS = {
         "transcript": "Transcript",
         "participants": "Participants",
         "hops": "hops",
+        "toc": "Table of Contents",
     },
     "de": {
         "summary": "Zusammenfassung",
@@ -41,6 +42,7 @@ LABELS = {
         "transcript": "Transkript",
         "participants": "Teilnehmer",
         "hops": "Hops",
+        "toc": "Inhaltsverzeichnis",
     },
 }
 
@@ -241,7 +243,8 @@ class RecordingDoc:
             ":doctype: article",
             ":toc: left",
             ":icons: font",
-            f":lang: {rec.language}" if rec.language else ":lang: en",
+            f":lang: {self.lang}",
+            f":toc-title: {self.label('toc')}",
             # the frames are named relative to the folder, so the document
             # travels with it and the same source renders inside the zip
             f":imagesdir: {os.path.abspath(self.images_dir)}",
