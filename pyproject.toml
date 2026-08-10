@@ -61,3 +61,4 @@ only-include = ["rdd"]
 
 [project.scripts]
 hopdetect = "rdd.rdd_cmd:main"
+reeldoc = "rdd.adoc_cmd:main"

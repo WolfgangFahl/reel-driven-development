@@ -1,0 +1,122 @@
+#!/bin/bash
+# WF 2026-08-10
+# package a reel as pdf + zip for review
+# https://wiki.bitplan.com/index.php/Reel_Driven_Development
+# see https://github.com/WolfgangFahl/reel-driven-development/issues/23
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if ! type success &>/dev/null; then
+  source "$SCRIPT_DIR/bash_messages" || {
+    echo "Error: $SCRIPT_DIR/bash_messages not found" >&2
+    exit 1
+  }
+fi
+
+VENV="${RDD_VENV:-$HOME/.rdd/venv}"
+REELDOC="$VENV/bin/reeldoc"
+OUT=""
+FORCE=""
+
+#
+# usage - show help
+#
+usage() {
+  cat << EOF
+usage: $0 [-h|--help][--install][-f|--force][--out <dir>] <recording folder>
+   -h|--help:         show this help
+   --install:         create $VENV and install the renderer
+   -f|--force:        overwrite an existing package
+   --out <dir>:       where the package is written (default: the folder itself)
+   recording folder:  the folder holding reel.yaml and the evidence frames
+   the package holds
+     <acronym>.adoc   the document source, generated from reel.yaml
+     <acronym>.pdf    what the reviewer reads and writes into
+     <acronym>.zip    the folder for whoever digs deeper
+   a persons.yaml in the folder maps a participant to the url they are
+   identifiable by outside the wiki; who is not in it keeps their name
+EOF
+  exit 1
+}
+
+#
+# do_install - create the venv and install the renderer
+#
+do_install() {
+  command -v python3 >/dev/null || error "python3 required"
+  if [[ ! -d "$VENV" ]]; then
+    action "creating $VENV"
+    python3 -m venv "$VENV" || error "cannot create $VENV"
+  fi
+  action "installing the reel-driven-development renderer into $VENV"
+  "$VENV/bin/pip" install -q -U "$SCRIPT_DIR/.." || error "install failed"
+  success "installed $("$REELDOC" -V 2>&1 | head -1)"
+}
+
+#
+# check_tools - make sure renderer, asciidoctor and zip are there
+#
+check_tools() {
+  # asciidoctor-pdf renders the document - it belongs on the server that
+  # packages the reels, not on a workstation
+  autoinstall asciidoctor-pdf ruby-asciidoctor-pdf asciidoctor || \
+    error "asciidoctor-pdf is required to render the pdf"
+  autoinstall zip zip zip || error "zip is required to bundle the folder"
+  [[ -x "$REELDOC" ]] || do_install
+}
+
+#
+# claim - refuse to overwrite an existing artefact unless forced
+#   $1: l_path the artefact to be written
+#
+claim() {
+  local l_path="$1"
+  if [[ -s "$l_path" && -z "$FORCE" ]]; then
+    error "$l_path exists - use --force to overwrite"
+  fi
+}
+
+#
+# package - build the package of one recording folder
+#   $1: l_folder the recording folder
+#
+package() {
+  local l_folder="$1"
+  local l_name l_out l_adoc l_pdf l_zip
+  [[ -d "$l_folder" ]] || error "no such folder: $l_folder"
+  [[ -f "$l_folder/reel.yaml" ]] || error "$l_folder holds no reel.yaml"
+  check_tools
+  l_folder="$(cd "$l_folder" && pwd)"
+  l_name="$(basename "$l_folder")"
+  l_out="${OUT:-$l_folder}"
+  mkdir -p "$l_out" || error "cannot create $l_out"
+  l_adoc="$l_out/$l_name.adoc"
+  l_pdf="$l_out/$l_name.pdf"
+  l_zip="$l_out/$l_name.zip"
+  claim "$l_pdf"
+  action "reading $l_folder/reel.yaml"
+  "$REELDOC" "$l_folder" --out "$l_adoc" || error "cannot render $l_folder"
+  action "rendering $l_pdf"
+  asciidoctor-pdf -o "$l_pdf" "$l_adoc" || error "asciidoctor-pdf failed"
+  success "$(du -h "$l_pdf" | cut -f1) in $l_pdf"
+  claim "$l_zip"
+  action "bundling $l_folder"
+  (cd "$(dirname "$l_folder")" && zip -q -r "$l_zip" "$l_name" -x "$l_name/*.zip") \
+    || error "zip failed"
+  success "$(du -h "$l_zip" | cut -f1) in $l_zip"
+}
+
+# no arguments -> usage
+[[ $# -eq 0 ]] && usage
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage ;;
+    --install) do_install ;;
+    -f|--force) FORCE="true" ;;
+    --out)
+      if [[ -n "$2" && "$2" != -* ]]; then OUT="$2"; shift; else usage; fi ;;
+    *) package "$1" ;;
+  esac
+  shift
+done

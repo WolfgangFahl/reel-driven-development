@@ -141,7 +141,7 @@ class HopDetector:
             candidates = [int(start.frame_num) for start, _ in scenes]
         return candidates
 
-    def clear(self, out_dir: str, force: bool):
+    def clear(self, out_dir: str, force: bool) -> Optional[HopSet]:
         """Make sure a hop set is not silently mixed with an older one.
 
         Writing a hop set over an older one leaves the frames the new run
@@ -150,46 +150,52 @@ class HopDetector:
         it is replaced whole, and replacing it removes the frames the old
         hop set named.
 
+        What a person wrote into the reel file - the name, the acronym,
+        the participants - is not a hop set and survives the replacement:
+        a detection replaces what it produced, never what it was given.
+
         Args:
             out_dir: the directory the hop set is written to.
             force: replace an existing hop set instead of keeping it.
 
+        Returns:
+            the reel file that was there, None where there was none.
+
         Raises:
             ValueError: if a hop set is there and force is not given.
         """
-        hops_path = os.path.join(out_dir, "hops.yaml")
-        if os.path.isfile(hops_path):
+        old = HopSet.of_dir(out_dir)
+        if old is not None and old.hops:
             if not force:
                 raise ValueError(
-                    f"{hops_path} already holds a hop set - "
+                    f"{HopSet.path_of(out_dir)} already holds a hop set - "
                     f"use --force to replace it"
                 )
-            old = HopSet.load_from_yaml_file(hops_path)
             for hop in old.hops:
                 if hop.screenshot:
                     frame_path = os.path.join(out_dir, hop.screenshot)
                     if os.path.isfile(frame_path):
                         os.remove(frame_path)
-            for name in ("hops.yaml", "config.yaml"):
-                name_path = os.path.join(out_dir, name)
-                if os.path.isfile(name_path):
-                    os.remove(name_path)
+            old.hops = []
+        return old
 
-    def recording_of(self, hop_count: int) -> Recording:
+    def recording_of(self, given: Optional[Recording] = None) -> Recording:
         """The Recording record of the reel this run analyzed.
 
         Args:
-            hop_count: the number of hops found.
+            given: the Recording of a reel file written beforehand; its
+                values win, because they are what a person knew and the
+                reel cannot answer.
 
         Returns:
-            the Recording, with the fields the reel itself can answer;
-            the fields that come from the graph stay unset.
+            the Recording, with the fields the reel itself can answer
+            filled in where the given one leaves them open.
         """
-        recording = Recording(
-            videoFile=self.reel.videoFile,
-            durationMin=round(self.reel.duration_sec / 60.0, 1),
-            hopCount=hop_count,
-        )
+        recording = given if given else Recording()
+        if not recording.videoFile:
+            recording.videoFile = self.reel.videoFile
+        if recording.durationMin is None:
+            recording.durationMin = round(self.reel.duration_sec / 60.0, 1)
         return recording
 
     def hops(
@@ -210,9 +216,11 @@ class HopDetector:
 
         Args:
             config: the values selecting and parameterizing the detector.
-            out_dir: directory the evidence frames, hops.yaml and the
-                config.yaml that reproduces them are written to; None
-                writes nothing.
+            out_dir: directory the evidence frames and the reel.yaml that
+                carries them with the values reproducing them are written
+                to; a hopless reel.yaml already there is the input of the
+                run and its recording values are kept. None writes
+                nothing.
             progress: show the tqdm progress bar while detecting.
             force: overwrite a hop set that is already there.
 
@@ -223,11 +231,12 @@ class HopDetector:
             ValueError: if the output directory already holds a hop set
                 and force is not given.
         """
-        hop_contents = HopContents(recording=self.reel.videoFile)
+        # no back reference on the hop: the reel file it lives in is the reel
+        hop_contents = HopContents()
+        given = None
         if out_dir is not None:
-            self.clear(out_dir, force)
+            given = self.clear(out_dir, force)
             os.makedirs(out_dir, exist_ok=True)
-            config.save_to_yaml_file(os.path.join(out_dir, "config.yaml"))
         frame_nums = self.scenes(config, progress=progress)
         times_sec = [self.reel.time_of(frame_num) for frame_num in frame_nums]
         names = hop_frame_names(times_sec)
@@ -240,12 +249,12 @@ class HopDetector:
             hop_contents.add(HopContent(time=frame.timecode, screenshot=screenshot))
         if out_dir is not None:
             hop_set = HopSet(
-                recording=self.recording_of(hop_contents.hopCount),
+                recording=self.recording_of(given.recording if given else None),
                 config=config,
                 hops=hop_contents.hops,
             )
             hop_set.save(
-                os.path.join(out_dir, "hops.yaml"),
+                HopSet.path_of(out_dir),
                 version=Version.version,
                 date=datetime.now().strftime("%Y-%m-%d"),
             )

@@ -1,0 +1,8 @@
+# the persons of a Recording and the url they are identifiable by outside
+# the wiki - orcid, wikidata, a homepage, whatever fits
+# see https://github.com/WolfgangFahl/reel-driven-development/issues/23
+# a person not listed here keeps their plain name in the document
+# participants of a recording belong in the mapping beside the recording,
+# never in an example that is published with the source
+Wolfgang Fahl: https://orcid.org/0000-0003-1279-3709
+Ada Lovelace: https://www.wikidata.org/wiki/Q7259
