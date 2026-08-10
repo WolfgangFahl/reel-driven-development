@@ -36,6 +36,13 @@ class ReelDocCmd(BaseCmd):
         parser.add_argument(
             "-o", "--out", help="asciidoc file to write (default: in the folder)"
         )
+        parser.add_argument(
+            "--width",
+            type=int,
+            default=640,
+            help="width of an evidence frame in the document (default: 640) "
+            "- the lever on the size of the pdf",
+        )
 
     def handle_args(self, args: argparse.Namespace) -> bool:
         """Handle the parsed arguments by rendering the document.
@@ -63,7 +70,7 @@ class ReelDocCmd(BaseCmd):
         Args:
             args: parsed argument namespace.
         """
-        doc = RecordingDoc.of_folder(args.folder)
+        doc = RecordingDoc.of_folder(args.folder, width=args.width)
         recording = doc.recording
         name = recording.acronym or os.path.basename(os.path.abspath(args.folder))
         out_path = args.out

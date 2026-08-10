@@ -47,6 +47,9 @@ class Recording:
     transcript: Optional[str] = None
     driveLink: Optional[str] = None
     hopCount: Optional[int] = None
+    # what the recording is, in the language the Recording denotes -
+    # a document without it says what was clicked but not what it was about
+    summary: Optional[str] = None
 
 
 @lod_storable

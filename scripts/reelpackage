@@ -17,16 +17,19 @@ VENV="${RDD_VENV:-$HOME/.rdd/venv}"
 REELDOC="$VENV/bin/reeldoc"
 OUT=""
 FORCE=""
+WIDTH="640"
 
 #
 # usage - show help
 #
 usage() {
   cat << EOF
-usage: $0 [-h|--help][--install][-f|--force][--out <dir>] <recording folder>
+usage: $0 [-h|--help][--install][-f|--force][--width <px>][--out <dir>] <recording folder>
    -h|--help:         show this help
    --install:         create $VENV and install the renderer
    -f|--force:        overwrite an existing package
+   --width <px>:      width of an evidence frame in the document (default: $WIDTH)
+                      - the lever on the size of the pdf
    --out <dir>:       where the package is written (default: the folder itself)
    recording folder:  the folder holding reel.yaml and the evidence frames
    the package holds
@@ -95,13 +98,16 @@ package() {
   l_zip="$l_out/$l_name.zip"
   claim "$l_pdf"
   action "reading $l_folder/reel.yaml"
-  "$REELDOC" "$l_folder" --out "$l_adoc" || error "cannot render $l_folder"
+  "$REELDOC" "$l_folder" --out "$l_adoc" --width "$WIDTH" \
+    || error "cannot render $l_folder"
   action "rendering $l_pdf"
   asciidoctor-pdf -o "$l_pdf" "$l_adoc" || error "asciidoctor-pdf failed"
   success "$(du -h "$l_pdf" | cut -f1) in $l_pdf"
   claim "$l_zip"
   action "bundling $l_folder"
-  (cd "$(dirname "$l_folder")" && zip -q -r "$l_zip" "$l_name" -x "$l_name/*.zip") \
+  # the scaled frames of the document are derived and stay out of the bundle
+  (cd "$(dirname "$l_folder")" && \
+    zip -q -r "$l_zip" "$l_name" -x "$l_name/*.zip" "$l_name/.frames-*/*") \
     || error "zip failed"
   success "$(du -h "$l_zip" | cut -f1) in $l_zip"
 }
@@ -114,6 +120,8 @@ while [[ $# -gt 0 ]]; do
     -h|--help) usage ;;
     --install) do_install ;;
     -f|--force) FORCE="true" ;;
+    --width)
+      if [[ -n "$2" && "$2" != -* ]]; then WIDTH="$2"; shift; else usage; fi ;;
     --out)
       if [[ -n "$2" && "$2" != -* ]]; then OUT="$2"; shift; else usage; fi ;;
     *) package "$1" ;;

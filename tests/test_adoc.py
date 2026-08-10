@@ -16,6 +16,7 @@ from basemkit.basetest import Basetest
 from rdd.adoc import RecordingDoc
 from rdd.hopset import HopSet
 from rdd.recording import HopContent, Recording
+from rdd.transcript import Transcript, TranscriptSegment
 
 
 class TestAdoc(Basetest):
@@ -69,6 +70,37 @@ class TestAdoc(Basetest):
             doc.person_link("Ada Lovelace"),
         )
         self.assertEqual("Alan Turing", doc.person_link("Alan Turing"))
+
+    def test_language_follows_the_recording(self):
+        """Test that the headings are those of Template:RecordingDetails."""
+        self.hop_set.recording.summary = "worum es geht"
+        self.hop_set.recording.language = "de"
+        doc = RecordingDoc(self.hop_set, folder="/no/such/folder")
+        adoc = doc.asciidoc()
+        self.assertIn("== Zusammenfassung", adoc)
+        self.assertIn("== Graph Walk", adoc)
+        self.assertIn("Teilnehmer:", adoc)
+        # a language we have no labels for falls back to english
+        self.hop_set.recording.language = "fr"
+        self.assertEqual("Summary", RecordingDoc(self.hop_set, ".").label("summary"))
+
+    def test_transcript(self):
+        """Test that the improved transcript is rendered with its speakers."""
+        transcript = Transcript(
+            segments=[
+                TranscriptSegment(
+                    pos=1, start="00:00", speaker="Ada Lovelace", text="hello"
+                )
+            ]
+        )
+        doc = RecordingDoc(
+            self.hop_set, folder="/no/such/folder", transcript=transcript
+        )
+        adoc = doc.asciidoc()
+        self.assertIn("== Transcript", adoc)
+        self.assertIn("Ada Lovelace:: hello", adoc)
+        # a reel without an improved transcript shows no empty heading
+        self.assertNotIn("== Transcript", RecordingDoc(self.hop_set, ".").asciidoc())
 
     def test_asciidoc(self):
         """Test that the document carries a block per hop and no broken
