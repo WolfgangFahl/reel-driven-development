@@ -15,7 +15,6 @@ from typing import List, Optional
 from basemkit.base_cmd import BaseCmd
 
 from rdd.adoc import RecordingDoc
-from rdd.quickcheck import QuickCheck
 from rdd.version import Version
 
 
@@ -36,11 +35,6 @@ class ReelDocCmd(BaseCmd):
         parser.add_argument("folder", nargs="?", help="the recording folder")
         parser.add_argument(
             "-o", "--out", help="asciidoc file to write (default: in the folder)"
-        )
-        parser.add_argument(
-            "--quickcheck",
-            action="store_true",
-            help="also write the single page quick check html",
         )
         parser.add_argument(
             "--width",
@@ -83,9 +77,6 @@ class ReelDocCmd(BaseCmd):
         if out_path is None:
             out_path = os.path.join(args.folder, f"{name}.adoc")
         doc.save(out_path)
-        if args.quickcheck:
-            check_path = os.path.join(args.folder, f"{name}-quickcheck.html")
-            QuickCheck(doc).save(check_path)
         if not args.quiet:
             missing = [hop.pos for hop in doc.hop_set.hops if not doc.frame_path(hop)]
             if missing:

@@ -36,7 +36,6 @@ usage: $0 [-h|--help][--install][-f|--force][--width <px>][--out <dir>] <recordi
      <acronym>.adoc   the document source, generated from reel.yaml
      <acronym>.pdf    what the reviewer reads and writes into
      <acronym>.zip    the folder for whoever digs deeper
-     <acronym>-quickcheck.html  one page, three answers per hop, no server
    a persons.yaml in the folder maps a participant to the url they are
    identifiable by outside the wiki; who is not in it keeps their name
 EOF
@@ -97,15 +96,13 @@ package() {
   l_adoc="$l_out/$l_name.adoc"
   l_pdf="$l_out/$l_name.pdf"
   l_zip="$l_out/$l_name.zip"
-  l_check="$l_folder/$l_name-quickcheck.html"
   claim "$l_pdf"
   action "reading $l_folder/reel.yaml"
-  "$REELDOC" "$l_folder" --out "$l_adoc" --width "$WIDTH" --quickcheck \
+  "$REELDOC" "$l_folder" --out "$l_adoc" --width "$WIDTH" \
     || error "cannot render $l_folder"
   action "rendering $l_pdf"
   asciidoctor-pdf -o "$l_pdf" "$l_adoc" || error "asciidoctor-pdf failed"
   success "$(du -h "$l_pdf" | cut -f1) in $l_pdf"
-  [[ -s "$l_check" ]] && success "$(du -h "$l_check" | cut -f1) in $l_check"
   claim "$l_zip"
   action "bundling $l_folder"
   # the scaled frames of the document are derived and stay out of the bundle
