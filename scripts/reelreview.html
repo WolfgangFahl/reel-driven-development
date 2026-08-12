@@ -1,0 +1,427 @@
+<!-- Reel Driven Development - reelreview
+     single page HTML for the human-in-the-loop feedback pass over a reel folder
+     https://github.com/WolfgangFahl/reel-driven-development
+     spec: https://github.com/WolfgangFahl/reel-driven-development/issues/27
+     per hop and per transcript segment: confirm / reject / hide / modify
+     reject and hide take an optional reason, modify always has a text
+     the whole reel gets a verdict with a pseudo signature
+     result: reel-feedback.yaml - saved beside the reel, downloadable,
+     uploadable when reel.yaml config carries a feedback_url -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>reelreview</title>
+<style>
+:root {
+  --bg: #fafafa; --fg: #222; --card: #fff; --border: #ccc;
+  --confirm: #2e7d32; --reject: #c62828; --hide: #616161; --modify: #ef6c00; --open: #607d8b;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #1e1e1e; --fg: #ddd; --card: #2a2a2a; --border: #555; --hide: #9e9e9e; }
+}
+body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+header { display: flex; gap: 1em; align-items: baseline; padding: .4em .8em; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+header h1 { font-size: 1.1em; margin: 0; }
+.counts span { margin-right: .7em; }
+.c-confirm { color: var(--confirm); } .c-reject { color: var(--reject); }
+.c-hide { color: var(--hide); } .c-modify { color: var(--modify); } .c-open { color: var(--open); }
+main { display: flex; gap: .8em; padding: .8em; }
+#card { flex: 3; background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: .8em; }
+#side { flex: 2; min-width: 18em; }
+#shot { max-width: 100%; border: 1px solid var(--border); cursor: zoom-in; }
+#shot.zoom { position: fixed; inset: 0; max-width: 100vw; max-height: 100vh; width: 100vw; object-fit: contain; background: #000; z-index: 9; cursor: zoom-out; }
+#hopmeta { display: flex; gap: 1em; align-items: baseline; }
+.verdict { font-weight: bold; }
+.vbuttons button { font-size: 1em; padding: .35em 1em; margin-right: .5em; margin-top: .5em; border-radius: 4px; border: 1px solid var(--border); cursor: pointer; background: var(--card); color: var(--fg); }
+button.confirm.active { background: var(--confirm); color: #fff; }
+button.reject.active { background: var(--reject); color: #fff; }
+button.hide.active { background: var(--hide); color: #fff; }
+button.modify.active { background: var(--modify); color: #fff; }
+#detail label { display: block; margin-top: .4em; font-size: .85em; }
+#detail input, #detail textarea, #reelblock input, #reelblock textarea {
+  width: 100%; box-sizing: border-box; background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 3px; padding: .3em; }
+.required { outline: 2px solid var(--reject); }
+#transcript { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: .6em; font-size: .88em; max-height: 65vh; overflow-y: auto; }
+.seg { margin: .3em 0; padding: .15em .2em; border-left: 3px solid transparent; }
+.seg.s-confirm { border-left-color: var(--confirm); }
+.seg.s-reject { border-left-color: var(--reject); text-decoration: line-through; }
+.seg.s-hide { border-left-color: var(--hide); opacity: .55; }
+.seg.s-modify { border-left-color: var(--modify); }
+.seg .t { color: var(--open); margin-right: .4em; user-select: none; }
+.seg .txt[contenteditable="true"] { outline: 1px dashed var(--modify); }
+.segbtns { visibility: hidden; margin-left: .4em; }
+.seg:hover .segbtns { visibility: visible; }
+.segbtns button { font-size: .75em; padding: 0 .35em; border: 1px solid var(--border); border-radius: 3px; background: var(--card); color: var(--fg); cursor: pointer; }
+#reelblock { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: .8em; margin: 0 .8em .8em; }
+#reelblock h2 { font-size: 1em; margin: 0 0 .3em; }
+nav { display: flex; gap: .6em; align-items: center; padding: 0 .8em .8em; flex-wrap: wrap; }
+nav input { width: 4em; text-align: right; }
+#send { margin-left: auto; display: flex; gap: .5em; align-items: center; }
+#status { font-size: .85em; color: var(--open); }
+#strip { display: flex; overflow-x: auto; gap: 2px; padding: 0 .8em .8em; }
+#strip img { height: 40px; opacity: .5; cursor: pointer; border-bottom: 3px solid var(--open); }
+#strip img.cur { opacity: 1; outline: 2px solid var(--fg); }
+#strip img.v-confirm { border-color: var(--confirm); opacity: .9; }
+#strip img.v-reject { border-color: var(--reject); opacity: .9; }
+#strip img.v-hide { border-color: var(--hide); opacity: .9; }
+#strip img.v-modify { border-color: var(--modify); opacity: .9; }
+kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 .3em; font-size: .85em; }
+</style>
+</head>
+<body>
+<header>
+  <h1>reelreview</h1>
+  <span id="reelname"></span>
+  <span class="counts">
+    <span class="c-confirm">confirm <b id="n-confirm">0</b></span>
+    <span class="c-reject">reject <b id="n-reject">0</b></span>
+    <span class="c-hide">hide <b id="n-hide">0</b></span>
+    <span class="c-modify">modify <b id="n-modify">0</b></span>
+    <span class="c-open">open <b id="n-open">0</b></span>
+  </span>
+  <span><kbd>c</kbd> confirm <kbd>r</kbd> reject <kbd>h</kbd> hide <kbd>m</kbd> modify <kbd>←</kbd><kbd>→</kbd> hop <kbd>s</kbd> save</span>
+</header>
+<main>
+  <div id="card">
+    <div id="hopmeta">
+      <b id="pos"></b><span id="time"></span><span id="verdict" class="verdict"></span>
+    </div>
+    <img id="shot" alt="evidence frame" onclick="this.classList.toggle('zoom')">
+    <div class="vbuttons">
+      <button class="confirm" onclick="setVerdict('confirm')">confirm</button>
+      <button class="reject" onclick="setVerdict('reject')">reject</button>
+      <button class="hide" onclick="setVerdict('hide')">hide</button>
+      <button class="modify" onclick="setVerdict('modify')">modify</button>
+    </div>
+    <div id="detail">
+      <label id="l-reason">reason (optional) <input id="f-reason"></label>
+      <label id="l-text">modification text (required) <textarea id="f-text" rows="2"></textarea></label>
+      <label>node <input id="f-node"></label>
+      <label>url <input id="f-url"></label>
+      <label>summary <textarea id="f-summary" rows="2"></textarea></label>
+    </div>
+  </div>
+  <div id="side">
+    <div id="transcript"></div>
+  </div>
+</main>
+<div id="reelblock">
+  <h2>reel verdict</h2>
+  <div class="vbuttons" id="reelbuttons">
+    <button class="confirm" onclick="setReelVerdict('confirm')">confirm</button>
+    <button class="reject" onclick="setReelVerdict('reject')">reject</button>
+    <button class="hide" onclick="setReelVerdict('hide')">hide</button>
+    <button class="modify" onclick="setReelVerdict('modify')">modify</button>
+  </div>
+  <label>reason / text <input id="reel-text"></label>
+  <label>pseudo signature <input id="signature" placeholder="e.g. 👁️🧑 Wolfgang Fahl"></label>
+</div>
+<nav>
+  <button onclick="go(cur-1)">◀</button>
+  <input id="jump" type="number" min="1" onchange="go(+this.value-1)">
+  <span id="total"></span>
+  <button onclick="go(cur+1)">▶</button>
+  <span id="send">
+    <button onclick="save()">save</button>
+    <button onclick="download()">download</button>
+    <button id="upload" onclick="upload()">upload</button>
+    <button onclick="mail()">mail</button>
+    <span id="status"></span>
+  </span>
+</nav>
+<div id="strip"></div>
+<script>
+"use strict";
+/* minimal YAML subset for reel.yaml: comment header, nested maps (2-space indent),
+   one list of flat maps under hops:. */
+function parseReel(text) {
+  const reel = { header: [], recording: {}, config: {}, hops: [] };
+  let section = null, hop = null;
+  for (const line of text.split("\n")) {
+    if (/^#/.test(line)) { if (!section) reel.header.push(line); continue; }
+    if (!line.trim()) continue;
+    let m;
+    if ((m = line.match(/^(\w+):\s*$/))) { section = m[1]; hop = null; continue; }
+    if ((m = line.match(/^- (\w+):\s*(.*)$/)) && section === "hops") {
+      hop = {}; reel.hops.push(hop); hop[m[1]] = unq(m[2]); continue;
+    }
+    if ((m = line.match(/^\s+(\w+):\s*(.*)$/))) {
+      const tgt = section === "hops" ? hop : reel[section];
+      if (tgt) tgt[m[1]] = unq(m[2]);
+    }
+  }
+  return reel;
+}
+function unq(v) {
+  if (/^'.*'$/.test(v)) return v.slice(1, -1).replace(/''/g, "'");
+  if (/^".*"$/.test(v)) return JSON.parse(v);
+  return v;
+}
+function q(v) {
+  if (v === "" || v === null || v === undefined) return "''";
+  const s = String(v);
+  if (/^-?\d+(\.\d+)?$/.test(s) && !/^0\d/.test(s)) return s;
+  if (/^[A-Za-z][\w .\/-]*$/.test(s)) return s;
+  return "'" + s.replace(/'/g, "''") + "'";
+}
+
+const VERDICTS = ["confirm", "reject", "hide", "modify"];
+let reel = null, segments = [], cur = 0, dirty = false;
+/* feedback: hops[pos] and segments[pos] hold {verdict, reason?, text?, node?, url?, summary?} */
+let feedback = { reel: {}, hops: {}, segments: {} };
+const $ = id => document.getElementById(id);
+
+async function load() {
+  reel = parseReel(await (await fetch("reel.yaml")).text());
+  const files = await (await fetch("api/files")).json();
+  const tfile = files.find(f => f.endsWith("-transcript-raw.txt") || f === "transcript-raw.txt");
+  if (tfile) {
+    (await (await fetch(tfile)).text()).split("\n").forEach(l => {
+      const m = l.match(/^\[(\d+):(\d+)(?:\.\d+)?(?:\s*-->.*)?\]\s*(.*)$/);
+      if (m) segments.push({ pos: segments.length + 1, sec: 60 * +m[1] + +m[2], t: m[1] + ":" + m[2], text: m[3] });
+    });
+  }
+  const old = files.find(f => f === "reel-feedback.yaml");
+  if (old) try { importFeedback(await (await fetch(old)).text()); } catch (e) {}
+  $("reelname").textContent = (reel.recording.acronym || reel.recording.videoFile || "") +
+    " · " + (reel.recording.durationMin || "?") + " min · " + reel.config.detector;
+  $("total").textContent = "/ " + reel.hops.length;
+  $("upload").disabled = !reel.config.feedback_url;
+  $("upload").title = reel.config.feedback_url || "no feedback_url in reel.yaml config";
+  if (feedback.reel.signature) $("signature").value = feedback.reel.signature;
+  if (feedback.reel.text) $("reel-text").value = feedback.reel.text;
+  paintReelVerdict();
+  buildStrip();
+  const first = reel.hops.findIndex(h => !feedback.hops[h.pos]);
+  go(first >= 0 ? first : 0);
+}
+
+/* reel-feedback.yaml round trip */
+function emitFeedback() {
+  collect();
+  const out = ["# Reel Driven Development - reel-feedback",
+    "# spec: https://github.com/WolfgangFahl/reel-driven-development/issues/27", "",
+    "reel:",
+    "  acronym: " + q(reel.recording.acronym || ""),
+    "  videoFile: " + q(reel.recording.videoFile || ""),
+    "  verdict: " + q(feedback.reel.verdict || ""),
+    "  text: " + q(feedback.reel.text || ""),
+    "  signature: " + q(feedback.reel.signature || ""),
+    "  date: " + q(new Date().toISOString())];
+  for (const [name, keyfield] of [["hops", "pos"], ["segments", "pos"]]) {
+    out.push(name + ":");
+    const src = name === "hops" ? reel.hops : segments;
+    for (const item of src) {
+      const fb = feedback[name][item.pos];
+      if (!fb || !fb.verdict) continue;
+      out.push("- pos: " + item.pos);
+      if (item.time) out.push("  time: " + q(item.time));
+      if (item.t) out.push("  time: " + q(item.t));
+      out.push("  verdict: " + fb.verdict);
+      for (const k of ["reason", "text", "node", "url", "summary"])
+        if (fb[k]) out.push("  " + k + ": " + q(fb[k]));
+    }
+  }
+  return out.join("\n") + "\n";
+}
+function importFeedback(text) {
+  let section = null, item = null;
+  for (const line of text.split("\n")) {
+    if (/^#/.test(line) || !line.trim()) continue;
+    let m;
+    if ((m = line.match(/^(\w+):\s*$/))) { section = m[1]; item = null; continue; }
+    if ((m = line.match(/^- pos:\s*(\d+)/)) && (section === "hops" || section === "segments")) {
+      item = feedback[section][+m[1]] = {}; continue;
+    }
+    if ((m = line.match(/^\s+(\w+):\s*(.*)$/))) {
+      if (section === "reel") feedback.reel[m[1]] = unq(m[2]);
+      else if (item && m[1] !== "time") item[m[1]] = unq(m[2]);
+    }
+  }
+}
+
+function hopFb(i) {
+  const pos = reel.hops[i].pos;
+  return feedback.hops[pos] || (feedback.hops[pos] = {});
+}
+function collect() {
+  if (!reel) return;
+  const fb = hopFb(cur), hop = reel.hops[cur];
+  fb.reason = $("f-reason").value;
+  fb.text = $("f-text").value;
+  if (fb.verdict === "modify") {
+    for (const k of ["node", "url", "summary"])
+      if ($("f-" + k).value !== (hop[k] || "")) fb[k] = $("f-" + k).value;
+  }
+  feedback.reel.text = $("reel-text").value;
+  feedback.reel.signature = $("signature").value;
+}
+
+function buildStrip() {
+  const strip = $("strip");
+  strip.innerHTML = "";
+  reel.hops.forEach((hop, i) => {
+    const img = document.createElement("img");
+    img.src = hop.screenshot; img.loading = "lazy"; img.title = (i + 1) + " " + hop.time;
+    img.onclick = () => go(i);
+    strip.appendChild(img);
+  });
+  paintStrip();
+}
+function paintStrip() {
+  [...$("strip").children].forEach((img, i) => {
+    const v = (feedback.hops[reel.hops[i].pos] || {}).verdict;
+    img.className = (i === cur ? "cur " : "") + (v ? "v-" + v : "");
+  });
+  counts();
+}
+function counts() {
+  const c = { confirm: 0, reject: 0, hide: 0, modify: 0, open: 0 };
+  reel.hops.forEach(h => c[(feedback.hops[h.pos] || {}).verdict || "open"]++);
+  for (const k in c) $("n-" + k).textContent = c[k];
+}
+
+function go(i) {
+  if (!reel || i < 0 || i >= reel.hops.length) return;
+  collect();
+  cur = i;
+  const hop = reel.hops[cur], fb = hopFb(cur);
+  $("pos").textContent = "hop " + (cur + 1);
+  $("time").textContent = hop.time;
+  $("verdict").textContent = fb.verdict || "";
+  $("verdict").className = "verdict c-" + (fb.verdict || "open");
+  $("shot").src = hop.screenshot;
+  $("shot").classList.remove("zoom");
+  $("jump").value = cur + 1;
+  $("f-reason").value = fb.reason || "";
+  $("f-text").value = fb.text || "";
+  $("f-node").value = fb.node !== undefined ? fb.node : (hop.node || "");
+  $("f-url").value = fb.url !== undefined ? fb.url : (hop.url || "");
+  $("f-summary").value = fb.summary !== undefined ? fb.summary : (hop.summary || "");
+  paintDetail(fb);
+  document.querySelectorAll("#card .vbuttons button").forEach(b =>
+    b.classList.toggle("active", fb.verdict && b.classList.contains(fb.verdict)));
+  showTranscript(hop);
+  paintStrip();
+}
+function paintDetail(fb) {
+  const v = fb.verdict;
+  $("l-reason").style.display = (v === "reject" || v === "hide") ? "" : "none";
+  $("l-text").style.display = v === "modify" ? "" : "none";
+  for (const k of ["node", "url", "summary"])
+    $("f-" + k).parentElement.style.display = v === "modify" ? "" : "none";
+  $("f-text").classList.toggle("required", v === "modify" && !$("f-text").value);
+}
+
+function setVerdict(v) {
+  const fb = hopFb(cur);
+  fb.verdict = fb.verdict === v ? "" : v;
+  dirty = true;
+  collect(); backup();
+  if (fb.verdict === "modify") { paintDetail(fb); go(cur); $("f-text").focus(); }
+  else if (fb.verdict === "reject" || fb.verdict === "hide") { go(cur); $("f-reason").focus(); }
+  else if (fb.verdict) go(Math.min(cur + 1, reel.hops.length - 1));
+  else go(cur);
+}
+function setReelVerdict(v) {
+  feedback.reel.verdict = feedback.reel.verdict === v ? "" : v;
+  dirty = true; paintReelVerdict();
+}
+function paintReelVerdict() {
+  document.querySelectorAll("#reelbuttons button").forEach(b =>
+    b.classList.toggle("active", feedback.reel.verdict && b.classList.contains(feedback.reel.verdict)));
+}
+
+function segFb(pos) { return feedback.segments[pos] || (feedback.segments[pos] = {}); }
+function showTranscript(hop) {
+  const from = hopSec(hop);
+  const to = cur + 1 < reel.hops.length ? hopSec(reel.hops[cur + 1]) : Infinity;
+  const el = $("transcript");
+  el.innerHTML = "";
+  segments.filter(s => s.sec >= from - 5 && s.sec < to).forEach(s => {
+    const fb = feedback.segments[s.pos] || {};
+    const p = document.createElement("p");
+    p.className = "seg" + (fb.verdict ? " s-" + fb.verdict : "");
+    const t = document.createElement("span"); t.className = "t"; t.textContent = "[" + s.t + "]";
+    const txt = document.createElement("span"); txt.className = "txt";
+    txt.textContent = fb.text || s.text;
+    txt.contentEditable = fb.verdict === "modify";
+    txt.oninput = () => { segFb(s.pos).text = txt.textContent; dirty = true; };
+    const btns = document.createElement("span"); btns.className = "segbtns";
+    VERDICTS.forEach(v => {
+      const b = document.createElement("button");
+      b.textContent = v[0];
+      b.title = v + (v === "modify" ? " (edit the text for typos)" : "");
+      b.onclick = () => {
+        const fb2 = segFb(s.pos);
+        fb2.verdict = fb2.verdict === v ? "" : v;
+        if (fb2.verdict !== "modify") delete fb2.text;
+        dirty = true; backup(); showTranscript(hop);
+      };
+      btns.appendChild(b);
+    });
+    p.appendChild(t); p.appendChild(txt); p.appendChild(btns);
+    el.appendChild(p);
+  });
+}
+function hopSec(hop) { const m = String(hop.time).match(/(\d+):(\d+)/); return m ? 60 * +m[1] + +m[2] : 0; }
+
+function backup() { try { localStorage.setItem("reelreview:" + location.pathname, emitFeedback()); } catch (e) {} }
+
+function validate() {
+  const missing = Object.entries(feedback.hops).filter(([p, fb]) => fb.verdict === "modify" && !fb.text);
+  if (missing.length) {
+    $("status").textContent = "modify needs a text: hop pos " + missing.map(([p]) => p).join(", ");
+    return false;
+  }
+  if (!$("signature").value) {
+    $("status").textContent = "pseudo signature required";
+    $("signature").focus();
+    return false;
+  }
+  return true;
+}
+async function save() {
+  collect(); backup();
+  if (!validate()) return;
+  const res = await fetch("api/feedback", { method: "POST", body: emitFeedback() });
+  $("status").textContent = res.ok ? "saved reel-feedback.yaml " + new Date().toLocaleTimeString() : "save failed: " + res.status;
+  if (res.ok) dirty = false;
+}
+function download() {
+  collect(); if (!validate()) return;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([emitFeedback()], { type: "text/yaml" }));
+  a.download = (reel.recording.acronym || "reel") + "-feedback.yaml";
+  a.click();
+}
+async function upload() {
+  collect(); if (!validate()) return;
+  const res = await fetch("api/upload", { method: "POST", body: emitFeedback() });
+  $("status").textContent = res.ok ? "uploaded to " + reel.config.feedback_url : "upload failed: " + res.status;
+}
+function mail() {
+  collect(); if (!validate()) return;
+  save();
+  location.href = "mailto:?subject=" + encodeURIComponent("reel-feedback " + (reel.recording.acronym || "")) +
+    "&body=" + encodeURIComponent("reel-feedback.yaml saved in the recording folder - attach it from there.\n\n" +
+      "reel verdict: " + (feedback.reel.verdict || "open") + "\nsignature: " + feedback.reel.signature);
+}
+
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable) return;
+  const k = e.key;
+  const actions = {
+    c: () => setVerdict("confirm"), r: () => setVerdict("reject"),
+    h: () => setVerdict("hide"), m: () => setVerdict("modify"),
+    ArrowLeft: () => go(cur - 1), ArrowRight: () => go(cur + 1), s: save,
+  };
+  if (actions[k]) { e.preventDefault(); actions[k](); }
+});
+window.addEventListener("beforeunload", e => { if (dirty) e.preventDefault(); });
+load();
+</script>
+</body>
+</html>
