@@ -36,7 +36,9 @@ class ReelSiteCmd(BaseCmd):
             default="~/.rdd/reelsite.yaml",
             help="site configuration yaml [default: %(default)s]",
         )
-        parser.add_argument("--host", default="127.0.0.1", help="interface to listen on")
+        parser.add_argument(
+            "--host", default="127.0.0.1", help="interface to listen on"
+        )
         parser.add_argument("-p", "--port", type=int, help="port to serve on")
         parser.add_argument("-s", "--serve", action="store_true", help="serve the site")
 

@@ -16,9 +16,9 @@ from basemkit.yamlable import lod_storable
 class Palette:
     """One Material palette schema.
 
-    The eight values are the ones the ColorSchema of ngwidgets carries, so a
-    reel site looks like the other BITPlan applications without depending on
-    the library.
+    The eight values are the ones the ColorSchema of ngwidgets carries,
+    so a reel site looks like the other BITPlan applications without
+    depending on the library.
     """
 
     primary: str = "#5898d4"

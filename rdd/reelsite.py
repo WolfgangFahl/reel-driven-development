@@ -16,6 +16,7 @@ from typing import List, Optional
 
 from basemkit.yamlable import lod_storable
 
+from rdd.icons import svg
 from rdd.palette import Palette, Palettes
 from rdd.version import Version
 
@@ -61,7 +62,22 @@ class MenuEntry:
 
     name: str
     target: str
+    icon: str
     new_tab: bool = False
+
+    def as_html(self) -> str:
+        """Render the entry as an icon labelled link button.
+
+        Returns:
+            the anchor markup carrying the material icon and the name.
+        """
+        target = html.escape(self.target)
+        new_tab = " target=_blank" if self.new_tab else ""
+        markup = (
+            f'      <a href="{target}"{new_tab}>{svg(self.icon)}'
+            f"<span>{html.escape(self.name)}</span></a>"
+        )
+        return markup
 
 
 class ReelSite:
@@ -87,11 +103,11 @@ class ReelSite:
     def menu(self) -> List[MenuEntry]:
         """The menu entries - settings and chat are dropped, a visitor has neither."""
         entries = [
-            MenuEntry("home", "/"),
-            MenuEntry("reels", "/reels"),
-            MenuEntry("github", self.config.cm_url, new_tab=True),
-            MenuEntry("help", self.config.doc_url, new_tab=True),
-            MenuEntry("about", "/about"),
+            MenuEntry("home", "/", "home"),
+            MenuEntry("reels", "/reels", "movie"),
+            MenuEntry("github", self.config.cm_url, "bug_report", new_tab=True),
+            MenuEntry("help", self.config.doc_url, "help", new_tab=True),
+            MenuEntry("about", "/about", "info"),
         ]
         return entries
 
@@ -105,10 +121,13 @@ class ReelSite:
   :root {{ --bg: var(--dark); --fg: #ddd; --card: #2a2a2a; --border: #555; }}
 }}
 body {{ margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--fg); }}
-header {{ display: flex; gap: 1em; align-items: center; padding: .5em .8em; background: var(--primary); color: #fff; flex-wrap: wrap; }}
-header h1 {{ font-size: 1.1em; margin: 0; }}
-header a {{ color: #fff; text-decoration: none; border: 1px solid rgba(255,255,255,.5); border-radius: 4px; padding: .15em .7em; font-size: .9em; }}
+header {{ display: flex; gap: .6em; align-items: center; padding: .5em .8em; background: var(--primary); color: #fff; flex-wrap: wrap; }}
+header h1 {{ font-size: 1.1em; margin: 0 .4em 0 0; }}
+header a {{ display: inline-flex; align-items: center; gap: .35em; color: #fff; text-decoration: none; border: 1px solid rgba(255,255,255,.5); border-radius: 4px; padding: .2em .7em; font-size: .9em; }}
 header a:hover {{ background: var(--accent); }}
+.hamburger {{ display: inline-flex; align-items: center; background: none; border: none; color: #fff; cursor: pointer; padding: .1em; }}
+.hamburger.collapsed {{ position: fixed; top: .4em; left: .4em; z-index: 10; background: var(--primary); border-radius: 4px; padding: .25em; }}
+body.collapsed header, body.collapsed footer {{ display: none; }}
 main {{ padding: 1em; max-width: 55em; }}
 main h2 {{ font-size: 1.2em; }}
 main a {{ color: var(--primary); }}
@@ -129,12 +148,9 @@ td, th {{ text-align: left; padding: .2em .8em .2em 0; }}
         Returns:
             the complete html page.
         """
-        links = "\n".join(
-            f'      <a href="{html.escape(entry.target)}"'
-            f'{" target=_blank" if entry.new_tab else ""}>{entry.name}</a>'
-            for entry in self.menu()
-        )
+        links = "\n".join(entry.as_html() for entry in self.menu())
         site_title = html.escape(self.config.title)
+        menu_icon = svg("menu")
         page = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -145,7 +161,9 @@ td, th {{ text-align: left; padding: .2em .8em .2em 0; }}
 {self.style()}</style>
 </head>
 <body>
+<button class="hamburger collapsed" id="unhide" onclick="toggleMenu()" title="show menu" hidden>{menu_icon}</button>
 <header>
+  <button class="hamburger" onclick="toggleMenu()" title="hide menu">{menu_icon}</button>
   <h1>{site_title}</h1>
 {links}
 </header>
@@ -153,6 +171,12 @@ td, th {{ text-align: left; padding: .2em .8em .2em 0; }}
 {content}
 </main>
 <footer>{html.escape(self.config.copy_right)} - {self.version.name} {self.version.version}</footer>
+<script>
+function toggleMenu() {{
+  const collapsed = document.body.classList.toggle('collapsed');
+  document.getElementById('unhide').hidden = !collapsed;
+}}
+</script>
 </body>
 </html>
 """
@@ -191,12 +215,14 @@ free software under Apache-2.0, so any organization can run a site like this one
         """The list of reels this site makes public."""
         if self.config.reels:
             rows = "\n".join(
-                f"<tr><td><a href=\"{html.escape(reel.url)}\">"
+                f'<tr><td><a href="{html.escape(reel.url)}">'
                 f"{html.escape(reel.acronym)}</a></td>"
                 f"<td>{html.escape(reel.title)}</td></tr>"
                 for reel in self.config.reels
             )
-            content = f'<h2>Reels</h2>\n<div class="card">\n<table>\n{rows}\n</table>\n</div>'
+            content = (
+                f'<h2>Reels</h2>\n<div class="card">\n<table>\n{rows}\n</table>\n</div>'
+            )
         else:
             content = (
                 '<h2>Reels</h2>\n<div class="card">\n'

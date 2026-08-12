@@ -14,7 +14,7 @@ from typing import List, Optional
 
 from basemkit.base_cmd import BaseCmd
 
-from rdd.reelreview import serve
+from rdd.reelreview import DEFAULT_HOST, DEFAULT_PORT, serve
 from rdd.version import Version
 
 
@@ -36,13 +36,17 @@ class ReelReviewCmd(BaseCmd):
             "folder", nargs="?", default=".", help="recording folder (default: .)"
         )
         parser.add_argument(
-            "--host", default="0.0.0.0", help="interface to listen on"
+            "--host",
+            default=DEFAULT_HOST,
+            help="interface to listen on; the api needs no authentication, so"
+            " opening this beyond localhost shares write access to the reel"
+            " [default: %(default)s]",
         )
         parser.add_argument(
             "-p",
             "--port",
             type=int,
-            default=8123,
+            default=DEFAULT_PORT,
             help="port to serve on [default: %(default)s]",
         )
 
