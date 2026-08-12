@@ -187,6 +187,9 @@ async function load() {
   }
   const old = files.find(f => f === "reel-feedback.yaml");
   if (old) try { importFeedback(await (await fetch(old)).text()); } catch (e) {}
+  /* the local backup is written on every verdict, so it is at least as new as the file */
+  const local = localStorage.getItem("reelreview:" + location.pathname);
+  if (local) try { importFeedback(local); } catch (e) {}
   let folder = "";
   try { folder = (await (await fetch("api/info")).json()).folder || ""; } catch (e) {}
   const acronym = reel.recording.acronym || folder || reel.recording.videoFile || "reel";
@@ -389,9 +392,10 @@ function validate() {
   }
   return true;
 }
+/* a save is a checkpoint of the pass, never a submission - it is not validated
+   and never refused; signature and modify texts are asked for on upload and mail */
 async function save() {
   collect(); backup();
-  if (!validate()) return;
   const res = await fetch("api/feedback", { method: "POST", body: emitFeedback() });
   $("status").textContent = res.ok ? "saved reel-feedback.yaml " + new Date().toLocaleTimeString() : "save failed: " + res.status;
   if (res.ok) dirty = false;
