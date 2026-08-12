@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Reel Driven Development - reelreview server
 https://github.com/WolfgangFahl/reel-driven-development
@@ -20,7 +19,6 @@ Python stdlib only - no dependencies to install.
 Usage:
     reelreview [folder] [--port PORT]
 """
-import argparse
 import http.server
 import json
 import re
@@ -106,25 +104,31 @@ class ReelReviewHandler(http.server.SimpleHTTPRequestHandler):
             )
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__.strip().splitlines()[0])
-    parser.add_argument("folder", nargs="?", default=".", help="recording folder (default: .)")
-    parser.add_argument("--port", type=int, default=8123, help="port to serve on [default: 8123]")
-    args = parser.parse_args()
-    folder = Path(args.folder).resolve()
+def page_path() -> Path:
+    """Path of the review page shipped with the package."""
+    path = Path(__file__).parent / "resources" / "reelreview.html"
+    return path
+
+
+def serve(folder: Path, port: int = 8123, host: str = "0.0.0.0") -> None:
+    """Serve the given recording folder for the review pass.
+
+    Args:
+        folder: the recording folder holding reel.yaml.
+        port: port to serve on.
+        host: interface to listen on.
+
+    Raises:
+        ValueError: if the folder holds no reel.yaml or the page is missing.
+    """
     if not (folder / "reel.yaml").exists():
-        sys.exit(f"no reel.yaml in {folder}")
+        raise ValueError(f"no reel.yaml in {folder}")
     if not (folder / "reelreview.html").exists():
-        page = Path(__file__).resolve().parent / "reelreview.html"
-        if page.exists():
-            shutil.copy(page, folder / "reelreview.html")
-        else:
-            sys.exit(f"no reelreview.html beside {__file__} or in {folder}")
+        page = page_path()
+        if not page.exists():
+            raise ValueError(f"no reelreview.html in {folder} and none packaged")
+        shutil.copy(page, folder / "reelreview.html")
     handler = lambda *a, **kw: ReelReviewHandler(*a, directory=str(folder), **kw)
-    with http.server.ThreadingHTTPServer(("0.0.0.0", args.port), handler) as httpd:
-        print(f"reelreview: serving {folder} on http://{httpd.server_name}:{args.port}/")
+    with http.server.ThreadingHTTPServer((host, port), handler) as httpd:
+        print(f"reelreview: serving {folder} on http://{httpd.server_name}:{port}/")
         httpd.serve_forever()
-
-
-if __name__ == "__main__":
-    main()
