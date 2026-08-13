@@ -6,6 +6,8 @@ test the reel site - reels directory, main demo, access rights and delivery
 """
 
 import http.server
+import json
+import os
 import threading
 import urllib.error
 import urllib.request
@@ -173,6 +175,90 @@ class TestReelDelivery(Basetest):
         self.assertEqual(200, status)
         self.assertIn(b"secret-reel", body)
         self.assertIn(b"Maria Fahl", body)
+
+    def post(self, path: str, body: bytes) -> int:
+        """Post the given body to the test server.
+
+        Args:
+            path: the path to post to.
+            body: the request body.
+
+        Returns:
+            the status code of the response.
+        """
+        request = urllib.request.Request(f"{self.base_url}{path}", data=body)
+        try:
+            with urllib.request.urlopen(request) as response:
+                status = response.status
+        except urllib.error.HTTPError as http_error:
+            status = http_error.code
+        return status
+
+    def testReviewPage(self):
+        """Test that the review of a reel is one link away and right
+        checked - the packaged page, never a copy."""
+        status, body, _headers = self.get("/reels/genwiki-walk/")
+        self.assertEqual(200, status)
+        self.assertIn(b'<a href="review">review</a>', body)
+        self.assertIn(b"<b>summary</b>", body)
+        status, body, _headers = self.get("/reels/genwiki-walk/review")
+        self.assertEqual(200, status)
+        self.assertIn(b"reelreview", body)
+        status, _body, _headers = self.get("/reels/secret-reel/review")
+        self.assertEqual(404, status)
+        status, body, _headers = self.get(f"/reels/{self.TOKEN}/secret-reel/review")
+        self.assertEqual(200, status)
+        self.assertIn(b"reelreview", body)
+
+    def testReviewApi(self):
+        """Test that the site answers the read api of the review page."""
+        status, body, _headers = self.get("/reels/genwiki-walk/api/files")
+        self.assertEqual(200, status)
+        files = json.loads(body)
+        self.assertIn("reel.yaml", files)
+        status, body, _headers = self.get("/reels/genwiki-walk/api/info")
+        self.assertEqual(200, status)
+        info = json.loads(body)
+        self.assertEqual("genwiki-walk", info["acronym"])
+
+    def testStaleCopyIsShadowed(self):
+        """Test that a reelreview.html in a reel folder is neither listed
+        nor served - the packaged page answers instead."""
+        stale_path = "examples/recordings/genwiki-walk/reelreview.html"
+        with open(stale_path, "w") as stale_file:
+            stale_file.write("stale copy")
+        try:
+            status, body, _headers = self.get("/reels/genwiki-walk/api/files")
+            self.assertEqual(200, status)
+            self.assertNotIn("reelreview.html", json.loads(body))
+            status, body, _headers = self.get("/reels/genwiki-walk/reelreview.html")
+            self.assertEqual(200, status)
+            self.assertNotIn(b"stale copy", body)
+            self.assertIn(b"reelreview", body)
+        finally:
+            os.remove(stale_path)
+
+    def testSaveStoresNothing(self):
+        """Test true inspection mode - a save answers success and the
+        reel.yaml stays untouched."""
+        reel_yaml_path = "examples/recordings/genwiki-walk/reel.yaml"
+        with open(reel_yaml_path, "rb") as reel_yaml_file:
+            before = reel_yaml_file.read()
+        status = self.post("/reels/genwiki-walk/api/save", b"changed: yaml")
+        self.assertEqual(200, status)
+        status = self.post(f"/reels/{self.TOKEN}/secret-reel/api/feedback", b"note")
+        self.assertEqual(200, status)
+        status = self.post("/reels/secret-reel/api/save", b"denied")
+        self.assertEqual(404, status)
+        with open(reel_yaml_path, "rb") as reel_yaml_file:
+            after = reel_yaml_file.read()
+        self.assertEqual(before, after)
+
+    def testReelsTrailingSlash(self):
+        """Test that /reels/ answers the directory like /reels."""
+        status, body, _headers = self.get("/reels/")
+        self.assertEqual(200, status)
+        self.assertIn(b"genwiki-walk", body)
 
     def testEscapeIsNoEscape(self):
         """Test that a path may not leave its reel folder."""

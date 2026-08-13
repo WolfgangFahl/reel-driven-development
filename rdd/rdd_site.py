@@ -10,6 +10,7 @@ ADRs: Review UI stack, Home page and menu
 
 import html
 import http.server
+import json
 import mimetypes
 import os
 import re
@@ -22,6 +23,7 @@ from basemkit.yamlable import lod_storable
 
 from rdd.icons import svg
 from rdd.palette import Palette, Palettes
+from rdd.reelreview import page_path
 from rdd.reels import Reel, Reels
 from rdd.version import Version
 
@@ -264,12 +266,15 @@ class ReelSite:
             reel: the reel.
 
         Returns:
-            the sorted file names, hidden files excluded.
+            the sorted file names, hidden files and the review page
+            excluded - the review page is code of the package, never
+            data of a reel.
         """
         names = [
             name
             for name in sorted(os.listdir(reel.path))
             if not name.startswith(".")
+            and name != "reelreview.html"
             and os.path.isfile(os.path.join(reel.path, name))
         ]
         return names
@@ -277,7 +282,8 @@ class ReelSite:
     def reel_page(self, reel: Reel) -> str:
         """The page of one reel - what it is and the files it carries.
 
-        The file links are relative so a review link keeps its token.
+        The review and file links are relative so a review link keeps
+        its token.
 
         Args:
             reel: the reel.
@@ -295,7 +301,8 @@ class ReelSite:
         )
         content = (
             f"<h2>{html.escape(reel.title)}</h2>\n"
-            f'<div class="card">\n{html.escape(summary)}\n</div>\n'
+            '<p><a href="review">review</a></p>\n'
+            f'<div class="card">\n<b>summary</b><br>\n{html.escape(summary)}\n</div>\n'
             f'<div class="card">\n<table>\n'
             f"<tr><th>file</th><th>bytes</th></tr>\n{rows}\n</table>\n</div>"
         )
@@ -509,6 +516,7 @@ class ReelSiteHandler(http.server.BaseHTTPRequestHandler):
             "/": self.site.home,
             "/index.html": self.site.home,
             "/reels": self.site.reels,
+            "/reels/": self.site.reels,
             "/about": self.site.about,
         }
         page_of = pages.get(self.path)
@@ -525,9 +533,13 @@ class ReelSiteHandler(http.server.BaseHTTPRequestHandler):
 
         The url is /reels/<acronym>/<file>, optionally carrying the
         review token first - /reels/<token>/<acronym>/<file>. A bare
-        token shows the reels directory of its Review. Unknown tokens,
-        unknown acronyms and denied reels answer alike, tarpitted, so
-        neither tokens nor private acronyms can be probed.
+        token shows the reels directory of its Review. Below the reel,
+        review answers the packaged review page - reelreview.html
+        alike, so a stale copy in a reel folder is shadowed - and
+        api/files and api/info answer the page's read api. Unknown
+        tokens, unknown acronyms and denied reels answer alike,
+        tarpitted, so neither tokens nor private acronyms can be
+        probed.
 
         Args:
             rest: the path after /reels/.
@@ -548,6 +560,15 @@ class ReelSiteHandler(http.server.BaseHTTPRequestHandler):
         file_parts = [part for part in parts[1:] if part]
         if not file_parts:
             self.respond(self.site.reel_page(reel).encode())
+            return
+        if file_parts in (["review"], ["reelreview.html"]):
+            self.respond(page_path().read_bytes())
+            return
+        if file_parts == ["api", "files"]:
+            self.respond_json(self.site.reel_files(reel))
+            return
+        if file_parts == ["api", "info"]:
+            self.respond_json({"folder": reel.folder, "acronym": reel.acronym})
             return
         file_path = os.path.realpath(os.path.join(reel.path, *file_parts))
         reel_dir = os.path.realpath(reel.path)
@@ -598,6 +619,48 @@ class ReelSiteHandler(http.server.BaseHTTPRequestHandler):
                     break
                 self.wfile.write(chunk)
                 remaining -= len(chunk)
+
+    def do_POST(self):
+        """Answer the write api of the review page - true inspection mode.
+
+        Per the Reel Review decision a save on this site answers
+        success and stores nothing on the server; server side storage
+        for token holders is the matter of the quick check issue. The
+        request must name an allowed reel, so the write api reveals no
+        more than the read api does.
+        """
+        match = re.match(
+            r"/reels/(.+)/api/(save|feedback|upload)$",
+            urllib.parse.unquote(self.path),
+        )
+        parts = match.group(1).split("/") if match else []
+        review = self.site.reviews.by_token().get(parts[0]) if parts else None
+        if review is not None:
+            parts = parts[1:]
+        directory = self.site.reels_found.by_acronym()
+        reel = directory.get(parts[0]) if len(parts) == 1 else None
+        if reel is None or not self.site.allowed(reel, review):
+            time.sleep(0.5)
+            self.send_error(404)
+            return
+        length = int(self.headers.get("Content-Length", 0))
+        self.rfile.read(length)
+        self.send_response(200)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def respond_json(self, data) -> None:
+        """Send the given data as a json response.
+
+        Args:
+            data: the payload to serialize.
+        """
+        body = json.dumps(data).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def respond(self, body: bytes):
         """Send the given page body as a successful response.

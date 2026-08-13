@@ -25,7 +25,6 @@ import json
 import re
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 DEFAULT_PORT = 8123
@@ -45,12 +44,20 @@ class ReelReviewHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         """Answer a file or api request.
 
-        / and /index.html serve the review page, /api/info the folder
-        name and acronym of the reviewed reel, /api/files the file names
-        of the folder; anything else is a static file of the folder.
+        /, /index.html and /reelreview.html serve the packaged review
+        page - the page is never data of the folder, so a stale copy in
+        the folder is shadowed. /api/info answers the folder name and
+        acronym of the reviewed reel, /api/files the file names of the
+        folder; anything else is a static file of the folder.
         """
-        if self.path in ("/", "/index.html"):
-            self.path = "/reelreview.html"
+        if self.path in ("/", "/index.html", "/reelreview.html"):
+            body = page_path().read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if self.path == "/api/info":
             folder = Path(self.directory)
             info = {"folder": folder.name}
@@ -163,11 +170,8 @@ def serve(folder: Path, port: int = DEFAULT_PORT, host: str = DEFAULT_HOST) -> N
     """
     if not (folder / "reel.yaml").exists():
         raise ValueError(f"no reel.yaml in {folder}")
-    if not (folder / "reelreview.html").exists():
-        page = page_path()
-        if not page.exists():
-            raise ValueError(f"no reelreview.html in {folder} and none packaged")
-        shutil.copy(page, folder / "reelreview.html")
+    if not page_path().exists():
+        raise ValueError(f"no packaged reelreview.html at {page_path()}")
     handler = lambda *a, **kw: ReelReviewHandler(*a, directory=str(folder), **kw)
     with http.server.ThreadingHTTPServer((host, port), handler) as httpd:
         print(f"reelreview: serving {folder} on http://{host}:{port}/")
