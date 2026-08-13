@@ -285,6 +285,21 @@ class TestReelDelivery(Basetest):
         status, _body, _headers = self.get("/reels/2026/06/genwiki-walk/")
         self.assertEqual(404, status)
 
+    def testReelPageRedirectsToTrailingSlash(self):
+        """Test that a reel page without trailing slash redirects, so the
+        relative review and file links resolve below the reel."""
+        request = urllib.request.Request(f"{self.base_url}/reels/genwiki-walk")
+        with urllib.request.urlopen(request) as response:
+            self.assertEqual("/reels/genwiki-walk/", response.url[len(self.base_url) :])
+        request = urllib.request.Request(
+            f"{self.base_url}/reels/{self.TOKEN}/genwiki-walk"
+        )
+        with urllib.request.urlopen(request) as response:
+            self.assertEqual(
+                f"/reels/{self.TOKEN}/genwiki-walk/",
+                response.url[len(self.base_url) :],
+            )
+
     def testReelsTrailingSlash(self):
         """Test that /reels/ answers the directory like /reels."""
         status, body, _headers = self.get("/reels/")

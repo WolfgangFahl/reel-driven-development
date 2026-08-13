@@ -640,6 +640,14 @@ class ReelSiteHandler(http.server.BaseHTTPRequestHandler):
             self.send_error(404)
             return
         if not file_parts:
+            if not self.path.endswith("/"):
+                # the reel page needs its trailing slash so its relative
+                # review and file links resolve below the reel
+                self.send_response(301)
+                self.send_header("Location", self.path + "/")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
             self.respond(self.site.reel_page(reel).encode())
             return
         if file_parts in (["review"], ["reelreview.html"]):
