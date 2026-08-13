@@ -5,6 +5,8 @@ test the reels of an installation
 @author: wf
 """
 
+import os
+
 from basemkit.basetest import Basetest
 
 from rdd.rdd_site import RddSiteConfig
@@ -24,30 +26,39 @@ class TestReels(Basetest):
 
     def testReelsLoading(self):
         """Test loading reels on the current production server or in CI
-        compatible way from the examples directory."""
+        compatible way from the examples directory.
+
+        The installation configuration decides: where ~/.rdd/rdd_site.yaml
+        exists the reels of that installation are loaded - on the Jenkins
+        node this is the actual noah configuration; where no configuration
+        exists, e.g. on a GitHub Actions runner, the example recordings
+        directory of the repository is loaded.
+        """
         force_ci = False  # set True to test the public CI path locally
-        if Basetest.inPublicCI() or force_ci:
-            recordings_dir = "examples/recordings"
-        else:
+        config_path = os.path.expanduser(RddSiteConfig.DEFAULT_PATH)
+        has_config = os.path.isfile(config_path) and not force_ci
+        if has_config:
             config = RddSiteConfig.of_path()
             recordings_dir = config.recordings_dir
+        else:
+            recordings_dir = "examples/recordings"
         reels = Reels.of_dir(recordings_dir)
         if self.debug:
             print(reels.as_summary())
         self.assertEqual({}, reels.errors)
         directory = reels.by_acronym()
-        if Basetest.inPublicCI() or force_ci:
+        if has_config:
+            # the master holds at least 13 reels with at least two demos
+            self.assertGreaterEqual(reels.count, 13)
+            demos = [reel for reel in reels.reels if reel.is_demo]
+            self.assertGreaterEqual(len(demos), 2)
+        else:
             # the example genwiki-walk 1 min video is properly loaded and
             # offered as a demo reel
             self.assertGreaterEqual(reels.count, 1)
             genwiki_walk = directory["genwiki-walk"]
             self.assertEqual(12, genwiki_walk.hop_count)
             self.assertTrue(genwiki_walk.is_demo)
-        else:
-            # the master holds at least 13 reels with at least two demos
-            self.assertGreaterEqual(reels.count, 13)
-            demos = [reel for reel in reels.reels if reel.is_demo]
-            self.assertGreaterEqual(len(demos), 2)
 
     def testVisibility(self):
         """Test that the access right changes the visibility of reels in the
