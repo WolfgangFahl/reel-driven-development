@@ -46,11 +46,14 @@ class ReelReviewHandler(http.server.SimpleHTTPRequestHandler):
 
         /, /index.html and /reelreview.html serve the packaged review
         page - the page is never data of the folder, so a stale copy in
-        the folder is shadowed. /api/info answers the folder name and
-        acronym of the reviewed reel, /api/files the file names of the
-        folder; anything else is a static file of the folder.
+        the folder is shadowed; an extensionless path is a hop url per
+        the Hop url decision and serves the page too, positioned by the
+        page itself. /api/info answers the folder name and acronym of
+        the reviewed reel, /api/files the file names of the folder;
+        anything else is a static file of the folder.
         """
-        if self.path in ("/", "/index.html", "/reelreview.html"):
+        hop_url = re.match(r"/[^/.]+$", self.path) and not self.path.startswith("/api/")
+        if self.path in ("/", "/index.html", "/reelreview.html") or hop_url:
             body = page_path().read_bytes()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")

@@ -612,7 +612,10 @@ class ReelSiteHandler(http.server.BaseHTTPRequestHandler):
         """Answer a request below /reels/ per the Delivery decision.
 
         The url is /reels/<acronym>/<file>, optionally carrying the
-        review token first - /reels/<token>/<acronym>/<file>. A bare
+        review token first - /reels/<token>/<acronym>/<file> - and per
+        the Hop url decision optionally the lengthy address
+        /reels/<year>/<month>/<acronym>/; a hop slug below the reel
+        answers the review positioned at that hop. A bare
         token shows the reels directory of its Review. Below the reel,
         review answers the packaged review page - reelreview.html
         alike, so a stale copy in a reel folder is shadowed - and
@@ -631,17 +634,18 @@ class ReelSiteHandler(http.server.BaseHTTPRequestHandler):
             if not parts or parts == [""]:
                 self.respond(self.site.reels(review).encode())
                 return
-        directory = self.site.reels_found.by_acronym()
-        reel = directory.get(parts[0]) if parts else None
+        reel, file_parts = self.resolve_reel(parts)
         if reel is None or not self.site.allowed(reel, review):
             time.sleep(0.5)
             self.send_error(404)
             return
-        file_parts = [part for part in parts[1:] if part]
         if not file_parts:
             self.respond(self.site.reel_page(reel).encode())
             return
         if file_parts in (["review"], ["reelreview.html"]):
+            self.respond(self.site.review_page().encode())
+            return
+        if len(file_parts) == 1 and file_parts[0] in reel.hop_slugs():
             self.respond(self.site.review_page().encode())
             return
         if file_parts == ["api", "files"]:
@@ -656,6 +660,33 @@ class ReelSiteHandler(http.server.BaseHTTPRequestHandler):
             self.send_error(404)
             return
         self.send_file(file_path)
+
+    def resolve_reel(self, parts: List[str]):
+        """Resolve the addressed reel - shortcut or lengthy form.
+
+        Per the Hop url decision the acronym is the shortcut address
+        and year/month/acronym the lengthy form disambiguating
+        non-unique acronyms.
+
+        Args:
+            parts: the path parts after /reels/ with the token stripped.
+
+        Returns:
+            the reel or None, and the remaining path parts.
+        """
+        reel = None
+        file_parts: List[str] = []
+        if (
+            len(parts) >= 3
+            and re.match(r"\d{4}$", parts[0])
+            and re.match(r"\d{2}$", parts[1])
+        ):
+            reel = self.site.reels_found.by_pid().get("/".join(parts[:3]))
+            file_parts = [part for part in parts[3:] if part]
+        elif parts:
+            reel = self.site.reels_found.by_acronym().get(parts[0])
+            file_parts = [part for part in parts[1:] if part]
+        return reel, file_parts
 
     def send_file(self, file_path: str):
         """Send the given file, answering range requests so seeking works.

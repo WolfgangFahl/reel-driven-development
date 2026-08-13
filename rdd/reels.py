@@ -96,6 +96,29 @@ class Reel:
         is_demo = self.status == "demo"
         return is_demo
 
+    @property
+    def year_month(self) -> Optional[str]:
+        """The year/month of the recording date - the lengthy address
+        part of the Hop url decision; None where the reel names no date."""
+        year_month = None
+        recording = self.recording
+        if recording and recording.date and len(recording.date) >= 7:
+            year_month = f"{recording.date[:4]}/{recording.date[5:7]}"
+        return year_month
+
+    def hop_slugs(self) -> List[str]:
+        """The persistent identifier slugs of the hops of this reel.
+
+        Per #21 the slug is the evidence frame name minus its extension,
+        so frame, hop and url carry one identity.
+
+        Returns:
+            the slugs of the hops carrying a screenshot.
+        """
+        hops = self.hop_set.hops if self.hop_set else []
+        slugs = [os.path.splitext(hop.screenshot)[0] for hop in hops if hop.screenshot]
+        return slugs
+
 
 @lod_storable
 class Reels:
@@ -180,6 +203,23 @@ class Reels:
             the lookup from acronym to reel.
         """
         lookup = {reel.acronym: reel for reel in self.reels}
+        return lookup
+
+    def by_pid(self) -> Dict[str, Reel]:
+        """The lookup by the lengthy address - year/month/acronym.
+
+        Per the Hop url decision the acronym is a shortcut that holds
+        while acronyms are unique; the lengthy form disambiguates by
+        the year and month of the Recording date.
+
+        Returns:
+            the lookup from year/month/acronym to reel.
+        """
+        lookup = {
+            f"{reel.year_month}/{reel.acronym}": reel
+            for reel in self.reels
+            if reel.year_month
+        }
         return lookup
 
     def visible(self, granted: Optional[List[str]] = None) -> List[Reel]:

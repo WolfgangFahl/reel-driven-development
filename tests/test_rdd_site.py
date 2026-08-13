@@ -264,6 +264,27 @@ class TestReelDelivery(Basetest):
             after = reel_yaml_file.read()
         self.assertEqual(before, after)
 
+    def testHopUrl(self):
+        """Test the Hop url decision - shortcut and lengthy PID iri
+        answer the review, a slug naming no hop is 404."""
+        status, body, _headers = self.get("/reels/genwiki-walk/hop01")
+        self.assertEqual(200, status)
+        self.assertIn(b"reelreview", body)
+        status, body, _headers = self.get("/reels/2026/05/genwiki-walk/hop01")
+        self.assertEqual(200, status)
+        self.assertIn(b"reelreview", body)
+        status, _body, _headers = self.get("/reels/genwiki-walk/hop-99h99m99s")
+        self.assertEqual(404, status)
+        status, body, _headers = self.get(f"/reels/{self.TOKEN}/genwiki-walk/hop01")
+        self.assertEqual(200, status)
+        status, _body, _headers = self.get(f"/reels/{self.TOKEN}/secret-reel/hop01")
+        self.assertEqual(404, status)
+        status, body, _headers = self.get("/reels/2026/05/genwiki-walk/reel.yaml")
+        self.assertEqual(200, status)
+        self.assertIn(b"acronym: genwiki-walk", body)
+        status, _body, _headers = self.get("/reels/2026/06/genwiki-walk/")
+        self.assertEqual(404, status)
+
     def testReelsTrailingSlash(self):
         """Test that /reels/ answers the directory like /reels."""
         status, body, _headers = self.get("/reels/")

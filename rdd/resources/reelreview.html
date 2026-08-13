@@ -120,7 +120,7 @@ kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 .3em; font
 <main>
   <div id="card">
     <div id="hopmeta">
-      <b id="pos"></b><span id="time"></span><span id="verdict" class="verdict"></span>
+      <b id="pos"></b><span id="time"></span><span id="verdict" class="verdict"></span><a id="pid" title="the persistent url of this hop"></a>
     </div>
     <img id="shot" alt="evidence frame" onclick="this.classList.toggle('zoom')">
     <div class="vbuttons">
@@ -221,7 +221,7 @@ async function load() {
   const old = files.find(f => f === "reel-feedback.yaml");
   if (old) try { importFeedback(await (await fetch(old)).text()); } catch (e) {}
   /* the local backup is written on every verdict, so it is at least as new as the file */
-  const local = localStorage.getItem("reelreview:" + location.pathname);
+  const local = localStorage.getItem(backupKey());
   if (local) try { importFeedback(local); } catch (e) {}
   let folder = "";
   try { folder = (await (await fetch("api/info")).json()).folder || ""; } catch (e) {}
@@ -236,8 +236,11 @@ async function load() {
   if (feedback.reel.text) $("reel-text").value = feedback.reel.text;
   paintReelVerdict();
   buildStrip();
-  const first = reel.hops.findIndex(h => !feedback.hops[h.pos]);
-  go(first >= 0 ? first : 0);
+  /* a hop url opens the review at that hop; otherwise the first open one */
+  const last = decodeURIComponent(location.pathname.split("/").pop());
+  let start = reel.hops.findIndex(h => slugOf(h) === last);
+  if (start < 0) start = reel.hops.findIndex(h => !feedback.hops[h.pos]);
+  go(start >= 0 ? start : 0);
 }
 
 /* reel-feedback.yaml round trip */
@@ -325,11 +328,20 @@ function counts() {
   for (const k in c) $("n-" + k).textContent = c[k];
 }
 
+function slugOf(hop) { return hop.screenshot ? hop.screenshot.replace(/\.[^.]+$/, "") : ""; }
 function go(i) {
   if (!reel || i < 0 || i >= reel.hops.length) return;
   collect();
   cur = i;
   const hop = reel.hops[cur], fb = hopFb(cur);
+  /* the hop url per the Hop url decision - the address bar follows so
+     the shown hop is always shareable */
+  const slug = slugOf(hop);
+  if (slug) {
+    history.replaceState(null, "", encodeURIComponent(slug));
+    $("pid").textContent = slug;
+    $("pid").href = encodeURIComponent(slug);
+  }
   $("pos").textContent = "hop " + (cur + 1);
   $("time").textContent = hop.time;
   $("verdict").textContent = fb.verdict || "";
@@ -410,7 +422,10 @@ function showTranscript(hop) {
 }
 function hopSec(hop) { const m = String(hop.time).match(/(\d+):(\d+)/); return m ? 60 * +m[1] + +m[2] : 0; }
 
-function backup() { try { localStorage.setItem("reelreview:" + location.pathname, emitFeedback()); } catch (e) {} }
+/* the backup key is the reel's directory - stable while the address bar
+   follows the hops */
+function backupKey() { return "reelreview:" + location.pathname.replace(/[^/]*$/, ""); }
+function backup() { try { localStorage.setItem(backupKey(), emitFeedback()); } catch (e) {} }
 
 function validate() {
   const missing = Object.entries(feedback.hops).filter(([p, fb]) => fb.verdict === "modify" && !fb.text);
