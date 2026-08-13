@@ -109,14 +109,19 @@ class Reel:
     def hop_slugs(self) -> List[str]:
         """The persistent identifier slugs of the hops of this reel.
 
-        Per #21 the slug is the evidence frame name minus its extension,
-        so frame, hop and url carry one identity.
+        Per #21 the slug is the evidence frame name minus its extension -
+        the base name, so frame, hop and url carry one identity even
+        when the frame lies in a subfolder.
 
         Returns:
             the slugs of the hops carrying a screenshot.
         """
         hops = self.hop_set.hops if self.hop_set else []
-        slugs = [os.path.splitext(hop.screenshot)[0] for hop in hops if hop.screenshot]
+        slugs = [
+            os.path.splitext(os.path.basename(hop.screenshot))[0]
+            for hop in hops
+            if hop.screenshot
+        ]
         return slugs
 
 

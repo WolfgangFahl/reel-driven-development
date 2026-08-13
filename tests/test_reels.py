@@ -75,3 +75,21 @@ class TestReels(Basetest):
         granted = reels.visible(granted=["NVK-2026-07-12"])
         self.assertIn(demo_reel, granted)
         self.assertIn(private_reel, granted)
+
+    def testHopSlugs(self):
+        """Test that the hop slug is the frame base name minus its
+        extension per #21 - never a path, even for frames in a
+        subfolder."""
+        from rdd.hopset import HopSet
+        from rdd.recording import HopContent
+
+        reel = Reel(
+            path="/somewhere/reel",
+            hop_set=HopSet(
+                hops=[
+                    HopContent(pos=1, screenshot="hop-00h02m12s.jpg"),
+                    HopContent(pos=2, screenshot="screenshots/walk-home.jpg"),
+                ]
+            ),
+        )
+        self.assertEqual(["hop-00h02m12s", "walk-home"], reel.hop_slugs())
