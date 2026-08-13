@@ -12,6 +12,7 @@ from typing import List, Optional
 
 from basemkit.base_cmd import BaseCmd
 
+from rdd.mint import Mint
 from rdd.rdd_site import RddSiteConfig, serve
 from rdd.version import Version
 
@@ -41,9 +42,29 @@ class ReelSiteCmd(BaseCmd):
         )
         parser.add_argument("-p", "--port", type=int, help="port to serve on")
         parser.add_argument("-s", "--serve", action="store_true", help="serve the site")
+        parser.add_argument(
+            "--init",
+            action="store_true",
+            help="initialize the site: seed the owner and mint the owner token",
+        )
+        parser.add_argument(
+            "--mint",
+            metavar="PERSON",
+            help="mint a review token for the given person",
+        )
+        parser.add_argument(
+            "--meeting", default="", help="the meeting a minted review belongs to"
+        )
+        parser.add_argument(
+            "--reels",
+            nargs="+",
+            default=[],
+            metavar="ACRONYM",
+            help="the reels a minted review grants",
+        )
 
     def handle_args(self, args: argparse.Namespace) -> bool:
-        """Handle the parsed arguments by serving the site.
+        """Handle the parsed arguments - init, mint or serve.
 
         Args:
             args: parsed argument namespace.
@@ -52,16 +73,45 @@ class ReelSiteCmd(BaseCmd):
             True if the arguments were handled.
         """
         handled = super().handle_args(args)
-        if not handled and args.serve:
+        if handled:
+            return handled
+        config = RddSiteConfig.of_path(args.config)
+        if args.port:
+            config.port = args.port
+        if args.init:
+            self.init_site(config)
+            handled = True
+        elif args.mint:
+            mint = Mint(config)
+            url = mint.mint_review(args.mint, args.meeting, args.reels)
+            print(url)
+            handled = True
+        elif args.serve:
             config_path = Path(args.config).expanduser()
             if not config_path.exists():
                 raise ValueError(f"no site configuration at {config_path}")
-            config = RddSiteConfig.of_file(str(config_path))
-            if args.port:
-                config.port = args.port
             serve(config, host=args.host)
             handled = True
         return handled
+
+    def init_site(self, config: RddSiteConfig):
+        """Run installation mode - seed the owner interactively.
+
+        Per the Owner bootstrap decision the owner link is shown once
+        on the interactive terminal and written to a mode 600 file; it
+        goes nowhere else.
+
+        Args:
+            config: the site configuration.
+        """
+        mint = Mint(config)
+        username = input("owner username: ").strip()
+        name = input("owner full name: ").strip()
+        email = input("owner email: ").strip()
+        url = input("owner url: ").strip()
+        owner_url = mint.init_site(username, name, email, url)
+        print(f"owner link (also in {mint.owner_link_path}, mode 600):")
+        print(owner_url)
 
 
 def main(argv: Optional[List[str]] = None) -> int:

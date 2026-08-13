@@ -187,7 +187,8 @@ class Reels:
 
         Anyone sees the public and demo reels; a Review right adds its
         private reels - per the Reel Review decision the access right
-        changes the visibility of reels in the reels directory.
+        changes the visibility of reels in the reels directory. The
+        wildcard '*' grants every reel per the Owner bootstrap decision.
 
         Args:
             granted: the acronyms a Review grants; None for anonymous.
@@ -196,9 +197,14 @@ class Reels:
             the visible reels, in the order of the scan.
         """
         granted_set = set(granted) if granted else set()
-        visible_reels = [
-            reel for reel in self.reels if reel.is_public or reel.acronym in granted_set
-        ]
+        if "*" in granted_set:
+            visible_reels = list(self.reels)
+        else:
+            visible_reels = [
+                reel
+                for reel in self.reels
+                if reel.is_public or reel.acronym in granted_set
+            ]
         return visible_reels
 
     def as_summary(self) -> str:

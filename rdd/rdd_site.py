@@ -47,6 +47,7 @@ class RddSiteConfig:
     name: str = "reels"
     title: str = "Reels"
     intro: str = ""
+    url: str = ""
     palette: str = "indigo"
     copy_right: str = ""
     cm_url: str = Version.cm_url
@@ -88,17 +89,68 @@ class RddSiteConfig:
 
 
 @lod_storable
+class Person:
+    """One person of a site - the seed minimum of the Owner bootstrap
+    decision.
+
+    The username is the key; full name, email and url are what a site
+    needs to address its people.
+    """
+
+    username: str = ""
+    name: str = ""
+    email: str = ""
+    url: str = ""
+
+
+@lod_storable
+class Persons:
+    """The persons of a site."""
+
+    DEFAULT_PATH = "~/.rdd/persons.yaml"
+
+    persons: List[Person] = field(default_factory=list)
+
+    @classmethod
+    def of_path(cls, path: Optional[str] = None) -> "Persons":
+        """Load the persons from the given yaml file.
+
+        Args:
+            path: the persons file; the default path when None.
+
+        Returns:
+            the persons; none where no file exists.
+        """
+        persons_path = os.path.expanduser(path or cls.DEFAULT_PATH)
+        if os.path.isfile(persons_path):
+            persons = cls.load_from_yaml_file(persons_path)
+        else:
+            persons = cls()
+        return persons
+
+
+@lod_storable
 class Review:
     """One review right - a reviewer and the reels their link grants.
 
     Per the Reel Review decision the review rights are not modeled in
     SMW (yet) but kept as entities the rdd site must keep track of.
+    Per the Owner bootstrap decision the owner's Review grants the
+    wildcard '*' - every reel, including future ones.
     """
+
+    WILDCARD = "*"
 
     token: str = ""
     person: str = ""
     meeting: str = ""
     reels: List[str] = field(default_factory=list)
+
+    @property
+    def is_wildcard(self) -> bool:
+        """Whether this review grants every reel."""
+        is_wildcard = self.WILDCARD in self.reels
+        return is_wildcard
 
 
 @lod_storable
@@ -253,10 +305,13 @@ class ReelSite:
             review: the review right; None for anonymous.
 
         Returns:
-            True for a public or demo reel, or a reel the review grants.
+            True for a public or demo reel, or a reel the review grants -
+            every reel where the review grants the wildcard.
         """
         granted = review.reels if review else []
-        allowed = reel.is_public or reel.acronym in granted
+        allowed = (
+            reel.is_public or Review.WILDCARD in granted or reel.acronym in granted
+        )
         return allowed
 
     def reel_files(self, reel: Reel) -> List[str]:
@@ -704,15 +759,31 @@ class ReelSiteHandler(http.server.BaseHTTPRequestHandler):
         print(f"{self.address_string()} {format % args}", flush=True)
 
 
-def serve(config: RddSiteConfig, host: str = "127.0.0.1") -> None:
+def serve(
+    config: RddSiteConfig,
+    host: str = "127.0.0.1",
+    reviews_path: Optional[str] = None,
+) -> None:
     """Serve the site of the given configuration.
 
     Args:
         config: the site configuration.
         host: the interface to listen on; localhost by default - the web
             server in front is what the internet talks to.
+        reviews_path: the reviews file; the default path when None.
+
+    Raises:
+        ValueError: where no reviews file exists - per the Owner
+            bootstrap decision a site without reviews.yaml is in
+            installation mode and refuses to serve.
     """
-    site = ReelSite(config)
+    reviews_file = os.path.expanduser(reviews_path or Reviews.DEFAULT_PATH)
+    if not os.path.isfile(reviews_file):
+        raise ValueError(
+            f"no {reviews_file} - the site is not initialized; "
+            "run reelsite --init first"
+        )
+    site = ReelSite(config, reviews=Reviews.of_path(reviews_file))
     main_demo = site.check_main_demo()
     print(f"rdd_site: {site.reels_found.as_summary()}", flush=True)
     print(f"rdd_site: main_demo {main_demo.acronym}", flush=True)
