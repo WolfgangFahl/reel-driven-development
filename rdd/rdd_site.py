@@ -619,7 +619,7 @@ class ReelSiteHandler(http.server.BaseHTTPRequestHandler):
         token shows the reels directory of its Review. Below the reel,
         review answers the packaged review page - reelreview.html
         alike, so a stale copy in a reel folder is shadowed - and
-        api/files and api/info answer the page's read api. Unknown
+        api/files, api/info and api/reel answer the page's read api. Unknown
         tokens, unknown acronyms and denied reels answer alike,
         tarpitted, so neither tokens nor private acronyms can be
         probed.
@@ -661,6 +661,10 @@ class ReelSiteHandler(http.server.BaseHTTPRequestHandler):
             return
         if file_parts == ["api", "info"]:
             self.respond_json({"folder": reel.folder, "acronym": reel.acronym})
+            return
+        if file_parts == ["api", "reel"]:
+            # the hop set parsed by the model - the page never parses YAML
+            self.respond_json(reel.hop_set.to_dict() if reel.hop_set else {})
             return
         file_path = os.path.realpath(os.path.join(reel.path, *file_parts))
         reel_dir = os.path.realpath(reel.path)

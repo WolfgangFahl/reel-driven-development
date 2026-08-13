@@ -9,12 +9,13 @@ pass and accepts the curated reel.yaml back:
     GET  /<file>      -> static file from the recording folder
     GET  /api/files   -> JSON list of the folder's file names
     GET  /api/info    -> JSON folder name and acronym of the reviewed reel
+    GET  /api/reel    -> JSON of the reel.yaml hop set parsed by the model
     POST /api/save     -> body replaces reel.yaml (RCS checkpoint first)
     POST /api/feedback -> body replaces reel-feedback.yaml (RCS checkpoint first)
     POST /api/upload   -> forward reel-feedback.yaml body to the feedback_url
                           configured in reel.yaml's config block
 
-Python stdlib only - no dependencies to install.
+The YAML work is done by the HopSet model - the page never parses YAML.
 
 Usage:
     reelreview [folder] [--port PORT]
@@ -26,6 +27,8 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+
+from rdd.hopset import HopSet
 
 DEFAULT_PORT = 8123
 DEFAULT_HOST = "127.0.0.1"
@@ -49,7 +52,8 @@ class ReelReviewHandler(http.server.SimpleHTTPRequestHandler):
         the folder is shadowed; an extensionless path is a hop url per
         the Hop url decision and serves the page too, positioned by the
         page itself. /api/info answers the folder name and acronym of
-        the reviewed reel, /api/files the file names of the folder;
+        the reviewed reel, /api/files the file names of the folder,
+        /api/reel the hop set of reel.yaml parsed by the model;
         anything else is a static file of the folder.
         """
         hop_url = re.match(r"/[^/.]+$", self.path) and not self.path.startswith("/api/")
@@ -72,6 +76,15 @@ class ReelReviewHandler(http.server.SimpleHTTPRequestHandler):
                 if match:
                     info["acronym"] = match.group(1).strip("\"'")
             body = json.dumps(info).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if self.path == "/api/reel":
+            hop_set = HopSet.of_dir(self.directory)
+            body = json.dumps(hop_set.to_dict() if hop_set else {}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))

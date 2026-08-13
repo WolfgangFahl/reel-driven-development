@@ -168,36 +168,6 @@ function toggleMenu() {
   const collapsed = document.body.classList.toggle('collapsed');
   document.getElementById('unhide').hidden = !collapsed;
 }
-/* minimal YAML subset for reel.yaml: comment header, nested maps (2-space indent),
-   one list of maps under hops: - block style or flow style {k: v, ...}. */
-function parseReel(text) {
-  const reel = { header: [], recording: {}, config: {}, hops: [] };
-  let section = null, hop = null;
-  for (const line of text.split("\n")) {
-    if (/^#/.test(line)) { if (!section) reel.header.push(line); continue; }
-    if (!line.trim()) continue;
-    let m;
-    if ((m = line.match(/^(\w+):\s*$/))) { section = m[1]; hop = null; continue; }
-    if ((m = line.match(/^-\s*\{(.*)\}\s*$/)) && section === "hops") {
-      hop = {}; reel.hops.push(hop);
-      /* split flow pairs on commas that start the next key, so commas
-         inside summaries survive */
-      for (const pair of m[1].split(/,\s*(?=\w+:\s)/)) {
-        const kv = pair.match(/^\s*(\w+):\s*(.*?)\s*$/);
-        if (kv) hop[kv[1]] = unq(kv[2]);
-      }
-      continue;
-    }
-    if ((m = line.match(/^- (\w+):\s*(.*)$/)) && section === "hops") {
-      hop = {}; reel.hops.push(hop); hop[m[1]] = unq(m[2]); continue;
-    }
-    if ((m = line.match(/^\s+(\w+):\s*(.*)$/))) {
-      const tgt = section === "hops" ? hop : reel[section];
-      if (tgt) tgt[m[1]] = unq(m[2]);
-    }
-  }
-  return reel;
-}
 function unq(v) {
   if (/^'.*'$/.test(v)) return v.slice(1, -1).replace(/''/g, "'");
   if (/^".*"$/.test(v)) return JSON.parse(v);
@@ -218,7 +188,12 @@ let feedback = { reel: {}, hops: {}, segments: {} };
 const $ = id => document.getElementById(id);
 
 async function load() {
-  reel = parseReel(await (await fetch("reel.yaml")).text());
+  /* the reel comes parsed from the server's api - the YAML work is done
+     by the HopSet model in python, never in this page */
+  reel = await (await fetch("api/reel")).json();
+  reel.recording = reel.recording || {};
+  reel.config = reel.config || {};
+  reel.hops = reel.hops || [];
   const files = await (await fetch("api/files")).json();
   const tfile = files.find(f => f.endsWith("-transcript-raw.txt") || f === "transcript-raw.txt");
   if (tfile) {
@@ -237,7 +212,7 @@ async function load() {
   const acronym = reel.recording.acronym || folder || reel.recording.videoFile || "reel";
   document.title = acronym + " · reelreview";
   $("reeltitle").textContent = acronym;
-  $("reelname").textContent = (reel.recording.durationMin || "?") + " min · " + reel.config.detector;
+  $("reelname").textContent = (reel.recording.durationMin || "?") + " min · " + (reel.config.detector || "?");
   $("total").textContent = "/ " + reel.hops.length;
   $("upload").disabled = !reel.config.feedback_url;
   $("upload").title = reel.config.feedback_url || "no feedback_url in reel.yaml config";

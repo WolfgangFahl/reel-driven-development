@@ -230,6 +230,15 @@ class TestReelDelivery(Basetest):
         self.assertEqual(200, status)
         info = json.loads(body)
         self.assertEqual("genwiki-walk", info["acronym"])
+        # api/reel answers the hop set parsed by the model, so a summary
+        # that PyYAML wrapped over several lines arrives whole
+        status, body, _headers = self.get("/reels/genwiki-walk/api/reel")
+        self.assertEqual(200, status)
+        reel_data = json.loads(body)
+        self.assertEqual("genwiki-walk", reel_data["recording"]["acronym"])
+        self.assertTrue(reel_data["recording"]["summary"].endswith("Kategorie SVG."))
+        self.assertEqual(12, len(reel_data["hops"]))
+        self.assertEqual("hop01.jpg", reel_data["hops"][0]["screenshot"])
 
     def testStaleCopyIsShadowed(self):
         """Test that a reelreview.html in a reel folder is neither listed
