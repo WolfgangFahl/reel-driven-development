@@ -10,8 +10,11 @@ ADRs: Review UI stack, Home page and menu
 
 import html
 import http.server
+import mimetypes
 import os
+import re
 import time
+import urllib.parse
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
@@ -220,17 +223,84 @@ class ReelSite:
             )
         return main_demo
 
-    def reel_url(self, reel: Reel) -> str:
-        """The url the web server serves the given reel folder under.
+    def reel_url(self, reel: Reel, review: Optional[Review] = None) -> str:
+        """The url this site serves the given reel under.
+
+        Per the Delivery decision the acronym is the only address a url
+        needs; a review link carries its token before the acronym.
+
+        Args:
+            reel: the reel.
+            review: the review whose token the url carries; None for the
+                public url.
+
+        Returns:
+            the url of the reel.
+        """
+        prefix = self.config.reels_url_prefix
+        if review:
+            prefix = f"{prefix}{review.token}/"
+        url = f"{prefix}{reel.acronym}/"
+        return url
+
+    def allowed(self, reel: Reel, review: Optional[Review] = None) -> bool:
+        """Whether the holder of the given right may inspect the reel.
+
+        Args:
+            reel: the reel.
+            review: the review right; None for anonymous.
+
+        Returns:
+            True for a public or demo reel, or a reel the review grants.
+        """
+        granted = review.reels if review else []
+        allowed = reel.is_public or reel.acronym in granted
+        return allowed
+
+    def reel_files(self, reel: Reel) -> List[str]:
+        """The files of the given reel folder.
 
         Args:
             reel: the reel.
 
         Returns:
-            the url of the reel folder.
+            the sorted file names, hidden files excluded.
         """
-        url = f"{self.config.reels_url_prefix}{reel.folder}/"
-        return url
+        names = [
+            name
+            for name in sorted(os.listdir(reel.path))
+            if not name.startswith(".")
+            and os.path.isfile(os.path.join(reel.path, name))
+        ]
+        return names
+
+    def reel_page(self, reel: Reel) -> str:
+        """The page of one reel - what it is and the files it carries.
+
+        The file links are relative so a review link keeps its token.
+
+        Args:
+            reel: the reel.
+
+        Returns:
+            the reel page.
+        """
+        recording = reel.recording
+        summary = recording.summary if recording and recording.summary else ""
+        rows = "\n".join(
+            f'<tr><td><a href="{html.escape(urllib.parse.quote(name))}">'
+            f"{html.escape(name)}</a></td>"
+            f"<td>{os.path.getsize(os.path.join(reel.path, name))}</td></tr>"
+            for name in self.reel_files(reel)
+        )
+        content = (
+            f"<h2>{html.escape(reel.title)}</h2>\n"
+            f'<div class="card">\n{html.escape(summary)}\n</div>\n'
+            f'<div class="card">\n<table>\n'
+            f"<tr><th>file</th><th>bytes</th></tr>\n{rows}\n</table>\n</div>"
+        )
+        page = self.page(reel.acronym, content)
+        return page
 
     def menu(self) -> List[MenuEntry]:
         """The menu entries - settings and chat are dropped, a visitor has neither."""
@@ -384,7 +454,7 @@ free software under Apache-2.0, so any organization can run a site like this one
             heading = f"Reels - review by {review.person}"
         if visible_reels:
             rows = "\n".join(
-                f'<tr><td><a href="{html.escape(self.reel_url(reel))}">'
+                f'<tr><td><a href="{html.escape(self.reel_url(reel, review))}">'
                 f"{html.escape(reel.acronym)}</a></td>"
                 f"<td>{html.escape(reel.title)}</td>"
                 f"<td>{reel.hop_count}</td>"
@@ -442,22 +512,92 @@ class ReelSiteHandler(http.server.BaseHTTPRequestHandler):
             "/about": self.site.about,
         }
         page_of = pages.get(self.path)
-        if page_of is None and self.path.startswith("/reels/"):
-            token = self.path[len("/reels/") :].rstrip("/")
-            review = self.site.reviews.by_token().get(token)
-            if review is None:
-                # tarpit unknown tokens so guessing stays hopeless
-                time.sleep(0.5)
-                self.send_error(404)
-                return
-            body = self.site.reels(review).encode()
-            self.respond(body)
+        if page_of is not None:
+            self.respond(page_of().encode())
             return
-        if page_of is None:
+        if self.path.startswith("/reels/"):
+            self.handle_reel(self.path[len("/reels/") :])
+            return
+        self.send_error(404)
+
+    def handle_reel(self, rest: str):
+        """Answer a request below /reels/ per the Delivery decision.
+
+        The url is /reels/<acronym>/<file>, optionally carrying the
+        review token first - /reels/<token>/<acronym>/<file>. A bare
+        token shows the reels directory of its Review. Unknown tokens,
+        unknown acronyms and denied reels answer alike, tarpitted, so
+        neither tokens nor private acronyms can be probed.
+
+        Args:
+            rest: the path after /reels/.
+        """
+        parts = [urllib.parse.unquote(part) for part in rest.split("/")]
+        review = self.site.reviews.by_token().get(parts[0])
+        if review is not None:
+            parts = parts[1:]
+            if not parts or parts == [""]:
+                self.respond(self.site.reels(review).encode())
+                return
+        directory = self.site.reels_found.by_acronym()
+        reel = directory.get(parts[0]) if parts else None
+        if reel is None or not self.site.allowed(reel, review):
+            time.sleep(0.5)
             self.send_error(404)
             return
-        body = page_of().encode()
-        self.respond(body)
+        file_parts = [part for part in parts[1:] if part]
+        if not file_parts:
+            self.respond(self.site.reel_page(reel).encode())
+            return
+        file_path = os.path.realpath(os.path.join(reel.path, *file_parts))
+        reel_dir = os.path.realpath(reel.path)
+        if not file_path.startswith(reel_dir + os.sep) or not os.path.isfile(file_path):
+            self.send_error(404)
+            return
+        self.send_file(file_path)
+
+    def send_file(self, file_path: str):
+        """Send the given file, answering range requests so seeking works.
+
+        Args:
+            file_path: the file to send.
+        """
+        file_size = os.path.getsize(file_path)
+        content_type = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
+        start = 0
+        end = file_size - 1
+        status = 200
+        range_match = re.match(r"bytes=(\d*)-(\d*)$", self.headers.get("Range") or "")
+        if range_match and (range_match.group(1) or range_match.group(2)):
+            if range_match.group(1):
+                start = int(range_match.group(1))
+                if range_match.group(2):
+                    end = min(int(range_match.group(2)), file_size - 1)
+            else:
+                start = max(file_size - int(range_match.group(2)), 0)
+            if start >= file_size or start > end:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{file_size}")
+                self.end_headers()
+                return
+            status = 206
+        length = end - start + 1
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Accept-Ranges", "bytes")
+        if status == 206:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
+        self.send_header("Content-Length", str(length))
+        self.end_headers()
+        with open(file_path, "rb") as reel_file:
+            reel_file.seek(start)
+            remaining = length
+            while remaining > 0:
+                chunk = reel_file.read(min(65536, remaining))
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                remaining -= len(chunk)
 
     def respond(self, body: bytes):
         """Send the given page body as a successful response.
