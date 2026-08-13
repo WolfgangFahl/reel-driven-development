@@ -1,6 +1,6 @@
 """Created on 2026-08-12.
 
-the site of an organization's reels - home page, menu and about
+the site of an organization's reel driven development videos - home page, menu and about
 
 see https://media.bitplan.com/index.php/Talk:Rdd.bitplan.com
 ADRs: Review UI stack, Home page and menu
@@ -10,34 +10,34 @@ ADRs: Review UI stack, Home page and menu
 
 import html
 import http.server
+import os
+import time
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from basemkit.yamlable import lod_storable
 
 from rdd.icons import svg
 from rdd.palette import Palette, Palettes
+from rdd.reels import Reel, Reels
 from rdd.version import Version
 
 
 @lod_storable
-class PublicReel:
-    """A reel this site offers to any visitor."""
-
-    acronym: str = ""
-    title: str = ""
-    url: str = ""
-
-
-@lod_storable
-class SiteConfig:
+class RddSiteConfig:
     """Everything an organization configures to run its own reel site.
 
     One yaml is the whole configuration - the site names itself, its
-    repository, its documentation and the palette it wears, so a stranger's
-    site names their project and not ours.
+    repository, its documentation, the palette it wears and its recordings
+    directory, so a stranger's site names their project and not ours.
+
+    The reels are not configured: the site names the recordings directory
+    and the reels are what that directory holds, so publishing a reel is
+    putting its folder there. main_demo names the demo the home page
+    offers - a site has at least one reel in demo status.
     """
+
+    DEFAULT_PATH = "~/.rdd/rdd_site.yaml"
 
     name: str = "reels"
     title: str = "Reels"
@@ -47,13 +47,88 @@ class SiteConfig:
     cm_url: str = Version.cm_url
     doc_url: str = Version.doc_url
     port: int = 9925
-    reels: List[PublicReel] = field(default_factory=list)
+    recordings_path: str = "~/.rdd/recordings"
+    main_demo: str = ""
+    max_reels_space_gb: int = 100
+    reels_url_prefix: str = "/reels/"
 
     @classmethod
-    def of_file(cls, path: str) -> "SiteConfig":
+    def of_file(cls, path: str) -> "RddSiteConfig":
         """Load the site configuration from the given yaml file."""
         config = cls.load_from_yaml_file(path)
         return config
+
+    @classmethod
+    def of_path(cls, path: Optional[str] = None) -> "RddSiteConfig":
+        """Load the site configuration from the given yaml file.
+
+        Args:
+            path: the configuration file; the default path when None.
+
+        Returns:
+            the configuration; the default configuration where no file exists.
+        """
+        config_path = os.path.expanduser(path or cls.DEFAULT_PATH)
+        if os.path.isfile(config_path):
+            config = cls.of_file(config_path)
+        else:
+            config = cls()
+        return config
+
+    @property
+    def recordings_dir(self) -> str:
+        """The recordings directory with the user's home resolved."""
+        recordings_dir = os.path.expanduser(self.recordings_path)
+        return recordings_dir
+
+
+@lod_storable
+class Review:
+    """One review right - a reviewer and the reels their link grants.
+
+    Per the Reel Review decision the review rights are not modeled in
+    SMW (yet) but kept as entities the rdd site must keep track of.
+    """
+
+    token: str = ""
+    person: str = ""
+    meeting: str = ""
+    reels: List[str] = field(default_factory=list)
+
+
+@lod_storable
+class Reviews:
+    """The review rights of a site."""
+
+    DEFAULT_PATH = "~/.rdd/reviews.yaml"
+
+    reviews: List[Review] = field(default_factory=list)
+
+    @classmethod
+    def of_path(cls, path: Optional[str] = None) -> "Reviews":
+        """Load the reviews from the given yaml file.
+
+        Args:
+            path: the reviews file; the default path when None.
+
+        Returns:
+            the reviews; no reviews where no file exists.
+        """
+        reviews_path = os.path.expanduser(path or cls.DEFAULT_PATH)
+        if os.path.isfile(reviews_path):
+            reviews = cls.load_from_yaml_file(reviews_path)
+        else:
+            reviews = cls()
+        return reviews
+
+    def by_token(self) -> Dict[str, Review]:
+        """The lookup from token to review.
+
+        Returns:
+            the lookup from token to review.
+        """
+        lookup = {review.token: review for review in self.reviews}
+        return lookup
 
 
 @dataclass
@@ -89,16 +164,73 @@ class ReelSite:
     reel site needs python and nothing else.
     """
 
-    def __init__(self, config: SiteConfig, version: Optional[Version] = None):
+    def __init__(
+        self,
+        config: RddSiteConfig,
+        version: Optional[Version] = None,
+        reels: Optional[Reels] = None,
+        reviews: Optional[Reviews] = None,
+    ):
         """Initialize with the site configuration.
 
         Args:
             config: the configuration of this site.
             version: version info of the software; defaults to the package version.
+            reels: the reels of this site; scanned from the configuration when None.
+            reviews: the review rights of this site; loaded from the default
+                path when None.
         """
         self.config = config
         self.version = version or Version()
         self.palette: Palette = Palettes.of_resource().by_name(config.palette)
+        self.reels_found = reels if reels is not None else self.scan()
+        self.reviews = reviews if reviews is not None else Reviews.of_path()
+
+    def scan(self) -> Reels:
+        """Scan the recordings directory of this site into its directory of
+        reels.
+
+        Returns:
+            the reels the recordings directory holds.
+        """
+        reels = Reels.of_dir(self.config.recordings_dir)
+        return reels
+
+    def check_main_demo(self) -> Reel:
+        """Get the mandatory main demo of this site.
+
+        Returns:
+            the reel the configuration names as main_demo.
+
+        Raises:
+            ValueError: where main_demo is unset, unknown or not in demo
+                status - a site has at least one demo.
+        """
+        directory = self.reels_found.by_acronym()
+        main_demo = directory.get(self.config.main_demo)
+        if main_demo is None:
+            raise ValueError(
+                f"main_demo '{self.config.main_demo}' is not a reel of "
+                f"{self.config.recordings_dir}"
+            )
+        if not main_demo.is_demo:
+            raise ValueError(
+                f"main_demo '{self.config.main_demo}' has status "
+                f"'{main_demo.status}' - demo is required"
+            )
+        return main_demo
+
+    def reel_url(self, reel: Reel) -> str:
+        """The url the web server serves the given reel folder under.
+
+        Args:
+            reel: the reel.
+
+        Returns:
+            the url of the reel folder.
+        """
+        url = f"{self.config.reels_url_prefix}{reel.folder}/"
+        return url
 
     def menu(self) -> List[MenuEntry]:
         """The menu entries - settings and chat are dropped, a visitor has neither."""
@@ -182,6 +314,27 @@ function toggleMenu() {{
 """
         return page
 
+    def demo_card(self) -> str:
+        """The demo section of the home page - the main_demo of this site.
+
+        Returns:
+            the demo card markup; empty where the main_demo does not
+            resolve, so a misconfigured site still serves its home page.
+        """
+        card = ""
+        directory = self.reels_found.by_acronym()
+        main_demo = directory.get(self.config.main_demo)
+        if main_demo and main_demo.is_demo:
+            url = self.reel_url(main_demo)
+            card = (
+                '<h2>Demo</h2>\n<div class="card">\n'
+                f'See a reel for yourself: <a href="{html.escape(url)}">'
+                f"{html.escape(main_demo.title)}</a> "
+                f"({main_demo.hop_count} hops) - inspect it in true "
+                "inspection mode; your verdicts stay on your device.\n</div>"
+            )
+        return card
+
     def home(self) -> str:
         """The home page - what this site is and the two ways in."""
         intro = self.config.intro or (
@@ -201,6 +354,7 @@ account and no password, and the link keeps working when reels are added.
 <div class="card">
 The reels this site makes public are listed under <a href="/reels">reels</a>.
 </div>
+{self.demo_card()}
 <h2>Reel Driven Development</h2>
 <div class="card">
 The reels are produced with
@@ -211,21 +365,40 @@ free software under Apache-2.0, so any organization can run a site like this one
         page = self.page("home", content)
         return page
 
-    def reels(self) -> str:
-        """The list of reels this site makes public."""
-        if self.config.reels:
+    def reels(self, review: Optional[Review] = None) -> str:
+        """The reels directory as the holder of the given right sees it.
+
+        Anyone sees the public and demo reels; a Review right adds its
+        private reels under the same directory.
+
+        Args:
+            review: the review right; None for the anonymous directory.
+
+        Returns:
+            the reels directory page.
+        """
+        granted = review.reels if review else None
+        visible_reels = self.reels_found.visible(granted)
+        heading = "Reels"
+        if review:
+            heading = f"Reels - review by {review.person}"
+        if visible_reels:
             rows = "\n".join(
-                f'<tr><td><a href="{html.escape(reel.url)}">'
+                f'<tr><td><a href="{html.escape(self.reel_url(reel))}">'
                 f"{html.escape(reel.acronym)}</a></td>"
-                f"<td>{html.escape(reel.title)}</td></tr>"
-                for reel in self.config.reels
+                f"<td>{html.escape(reel.title)}</td>"
+                f"<td>{reel.hop_count}</td>"
+                f"<td>{html.escape(reel.status)}</td></tr>"
+                for reel in visible_reels
             )
             content = (
-                f'<h2>Reels</h2>\n<div class="card">\n<table>\n{rows}\n</table>\n</div>'
+                f'<h2>{html.escape(heading)}</h2>\n<div class="card">\n<table>\n'
+                f"<tr><th>reel</th><th>title</th><th>hops</th><th>status</th></tr>\n"
+                f"{rows}\n</table>\n</div>"
             )
         else:
             content = (
-                '<h2>Reels</h2>\n<div class="card">\n'
+                f'<h2>{html.escape(heading)}</h2>\n<div class="card">\n'
                 "This site makes no reel public yet.\n</div>"
             )
         page = self.page("reels", content)
@@ -269,10 +442,29 @@ class ReelSiteHandler(http.server.BaseHTTPRequestHandler):
             "/about": self.site.about,
         }
         page_of = pages.get(self.path)
+        if page_of is None and self.path.startswith("/reels/"):
+            token = self.path[len("/reels/") :].rstrip("/")
+            review = self.site.reviews.by_token().get(token)
+            if review is None:
+                # tarpit unknown tokens so guessing stays hopeless
+                time.sleep(0.5)
+                self.send_error(404)
+                return
+            body = self.site.reels(review).encode()
+            self.respond(body)
+            return
         if page_of is None:
             self.send_error(404)
             return
         body = page_of().encode()
+        self.respond(body)
+
+    def respond(self, body: bytes):
+        """Send the given page body as a successful response.
+
+        Args:
+            body: the encoded html page.
+        """
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -284,7 +476,7 @@ class ReelSiteHandler(http.server.BaseHTTPRequestHandler):
         print(f"{self.address_string()} {format % args}", flush=True)
 
 
-def serve(config: SiteConfig, host: str = "127.0.0.1") -> None:
+def serve(config: RddSiteConfig, host: str = "127.0.0.1") -> None:
     """Serve the site of the given configuration.
 
     Args:
@@ -293,7 +485,10 @@ def serve(config: SiteConfig, host: str = "127.0.0.1") -> None:
             server in front is what the internet talks to.
     """
     site = ReelSite(config)
+    main_demo = site.check_main_demo()
+    print(f"rdd_site: {site.reels_found.as_summary()}", flush=True)
+    print(f"rdd_site: main_demo {main_demo.acronym}", flush=True)
     handler = type("BoundReelSiteHandler", (ReelSiteHandler,), {"site": site})
     with http.server.ThreadingHTTPServer((host, config.port), handler) as httpd:
-        print(f"reelsite: {config.title} on http://{host}:{config.port}/", flush=True)
+        print(f"rdd_site: {config.title} on http://{host}:{config.port}/", flush=True)
         httpd.serve_forever()

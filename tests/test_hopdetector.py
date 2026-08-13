@@ -20,7 +20,12 @@ class TestSceneDetect(Basetest):
         Basetest.setUp(self, debug=debug, profile=profile)
         current_folder = os.path.dirname(__file__)
         self.reel_path = os.path.join(
-            current_folder, "..", "examples", "genwiki-walk", "genwiki-walk.mp4"
+            current_folder,
+            "..",
+            "examples",
+            "recordings",
+            "genwiki-walk",
+            "genwiki-walk.mp4",
         )
 
     def get_reel(self) -> Reel:

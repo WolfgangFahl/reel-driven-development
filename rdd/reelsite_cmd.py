@@ -12,7 +12,7 @@ from typing import List, Optional
 
 from basemkit.base_cmd import BaseCmd
 
-from rdd.reelsite import SiteConfig, serve
+from rdd.rdd_site import RddSiteConfig, serve
 from rdd.version import Version
 
 
@@ -33,7 +33,7 @@ class ReelSiteCmd(BaseCmd):
         parser.add_argument(
             "-c",
             "--config",
-            default="~/.rdd/reelsite.yaml",
+            default=RddSiteConfig.DEFAULT_PATH,
             help="site configuration yaml [default: %(default)s]",
         )
         parser.add_argument(
@@ -56,7 +56,7 @@ class ReelSiteCmd(BaseCmd):
             config_path = Path(args.config).expanduser()
             if not config_path.exists():
                 raise ValueError(f"no site configuration at {config_path}")
-            config = SiteConfig.of_file(str(config_path))
+            config = RddSiteConfig.of_file(str(config_path))
             if args.port:
                 config.port = args.port
             serve(config, host=args.host)
