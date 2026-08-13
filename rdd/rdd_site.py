@@ -47,7 +47,7 @@ class RddSiteConfig:
     name: str = "reels"
     title: str = "Reels"
     intro: str = ""
-    palette: str = "default"
+    palette: str = "indigo"
     copy_right: str = ""
     cm_url: str = Version.cm_url
     doc_url: str = Version.doc_url
@@ -309,6 +309,31 @@ class ReelSite:
         page = self.page(reel.acronym, content)
         return page
 
+    def review_page(self) -> str:
+        """The review page of this site.
+
+        Per the Review UI stack decision the packaged page is one
+        self-contained file; serving it, the site derives the CSS
+        variables from its named palette and puts its own menu into
+        the marked header slot, so the review wears the same palette
+        and menu as every other page of the site - one source, no
+        second copy to keep in step.
+
+        Returns:
+            the review page in the site's palette with the site's menu.
+        """
+        page = page_path().read_text()
+        for name, value in self.palette.__dict__.items():
+            page = re.sub(rf"--{name}: #[0-9A-Fa-f]+;", f"--{name}: {value};", page)
+        links = "\n".join(entry.as_html() for entry in self.menu())
+        page = re.sub(
+            r"<!-- menu -->.*?<!-- /menu -->",
+            f"<!-- menu -->\n{links}\n  <!-- /menu -->",
+            page,
+            flags=re.DOTALL,
+        )
+        return page
+
     def menu(self) -> List[MenuEntry]:
         """The menu entries - settings and chat are dropped, a visitor has neither."""
         entries = [
@@ -562,7 +587,7 @@ class ReelSiteHandler(http.server.BaseHTTPRequestHandler):
             self.respond(self.site.reel_page(reel).encode())
             return
         if file_parts in (["review"], ["reelreview.html"]):
-            self.respond(page_path().read_bytes())
+            self.respond(self.site.review_page().encode())
             return
         if file_parts == ["api", "files"]:
             self.respond_json(self.site.reel_files(reel))

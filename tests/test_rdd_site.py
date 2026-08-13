@@ -71,6 +71,16 @@ class TestRddSite(Basetest):
         self.assertIn("NVK-2026-07-12", review_page)
         self.assertIn("Maria Fahl", review_page)
 
+    def testReviewPageWearsTheSite(self):
+        """Test that the served review page wears the site's palette and
+        menu - one source, no second copy."""
+        self.config.palette = "red"
+        site = ReelSite(self.config, reviews=Reviews())
+        page = site.review_page()
+        self.assertIn("--primary: #F44336;", page)
+        self.assertIn("<span>home</span>", page)
+        self.assertIn("<span>about</span>", page)
+
     def testAboutAndMenu(self):
         """Test that the about page names version, license and repository."""
         about = self.site.about()

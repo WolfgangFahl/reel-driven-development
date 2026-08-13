@@ -69,7 +69,7 @@ button.modify.active { background: var(--modify); color: #fff; }
 .segbtns button { font-size: .75em; padding: 0 .35em; border: 1px solid var(--border); border-radius: 3px; background: var(--card); color: var(--fg); cursor: pointer; }
 #reelblock { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: .8em; margin: 0 .8em .8em; }
 #reelblock h2 { font-size: 1em; margin: 0 0 .3em; }
-nav { display: flex; gap: .6em; align-items: center; padding: 0 .8em .8em; flex-wrap: wrap; }
+nav { display: flex; gap: .6em; align-items: center; padding: .5em .8em; flex-wrap: wrap; }
 nav input { width: 4em; text-align: right; }
 #send { margin-left: auto; display: flex; gap: .5em; align-items: center; }
 #status { font-size: .85em; color: var(--open); }
@@ -89,8 +89,10 @@ kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 .3em; font
   <button class="hamburger" onclick="toggleMenu()" title="hide menu"><svg viewBox="0 0 24 24" width="1.2em" height="1.2em" fill="currentColor" aria-hidden="true"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg></button>
   <h1 id="reeltitle">reelreview</h1>
   <span id="reelname"></span>
+  <!-- menu -->
   <a href="https://github.com/WolfgangFahl/reel-driven-development" target="_blank"><svg viewBox="0 0 24 24" width="1.2em" height="1.2em" fill="currentColor" aria-hidden="true"><path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5c-.49 0-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/></svg><span>github</span></a>
   <a href="https://wiki.bitplan.com/index.php/Reel_Driven_Development" target="_blank"><svg viewBox="0 0 24 24" width="1.2em" height="1.2em" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg><span>help</span></a>
+  <!-- /menu -->
   <span class="app">reelreview</span>
   <span class="counts">
     <span class="c-confirm">confirm <b id="n-confirm">0</b></span>
@@ -101,6 +103,20 @@ kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 .3em; font
   </span>
   <span><kbd>c</kbd> confirm <kbd>r</kbd> reject <kbd>h</kbd> hide <kbd>m</kbd> modify <kbd>←</kbd><kbd>→</kbd> hop <kbd>s</kbd> save</span>
 </header>
+<nav>
+  <button onclick="go(cur-1)">◀</button>
+  <input id="jump" type="number" min="1" onchange="go(+this.value-1)">
+  <span id="total"></span>
+  <button onclick="go(cur+1)">▶</button>
+  <span id="send">
+    <button onclick="save()">save</button>
+    <button onclick="download()">download</button>
+    <button id="upload" onclick="upload()">upload</button>
+    <button onclick="mail()">mail</button>
+    <span id="status"></span>
+  </span>
+</nav>
+<div id="strip"></div>
 <main>
   <div id="card">
     <div id="hopmeta">
@@ -136,20 +152,6 @@ kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 .3em; font
   <label>reason / text <input id="reel-text"></label>
   <label>pseudo signature <input id="signature" placeholder="e.g. 👁️🧑 Wolfgang Fahl"></label>
 </div>
-<nav>
-  <button onclick="go(cur-1)">◀</button>
-  <input id="jump" type="number" min="1" onchange="go(+this.value-1)">
-  <span id="total"></span>
-  <button onclick="go(cur+1)">▶</button>
-  <span id="send">
-    <button onclick="save()">save</button>
-    <button onclick="download()">download</button>
-    <button id="upload" onclick="upload()">upload</button>
-    <button onclick="mail()">mail</button>
-    <span id="status"></span>
-  </span>
-</nav>
-<div id="strip"></div>
 <script>
 "use strict";
 /* hamburger - hides the header the way the ngwidgets applications do */
@@ -158,7 +160,7 @@ function toggleMenu() {
   document.getElementById('unhide').hidden = !collapsed;
 }
 /* minimal YAML subset for reel.yaml: comment header, nested maps (2-space indent),
-   one list of flat maps under hops:. */
+   one list of maps under hops: - block style or flow style {k: v, ...}. */
 function parseReel(text) {
   const reel = { header: [], recording: {}, config: {}, hops: [] };
   let section = null, hop = null;
@@ -167,6 +169,16 @@ function parseReel(text) {
     if (!line.trim()) continue;
     let m;
     if ((m = line.match(/^(\w+):\s*$/))) { section = m[1]; hop = null; continue; }
+    if ((m = line.match(/^-\s*\{(.*)\}\s*$/)) && section === "hops") {
+      hop = {}; reel.hops.push(hop);
+      /* split flow pairs on commas that start the next key, so commas
+         inside summaries survive */
+      for (const pair of m[1].split(/,\s*(?=\w+:\s)/)) {
+        const kv = pair.match(/^\s*(\w+):\s*(.*?)\s*$/);
+        if (kv) hop[kv[1]] = unq(kv[2]);
+      }
+      continue;
+    }
     if ((m = line.match(/^- (\w+):\s*(.*)$/)) && section === "hops") {
       hop = {}; reel.hops.push(hop); hop[m[1]] = unq(m[2]); continue;
     }
