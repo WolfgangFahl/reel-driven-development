@@ -125,11 +125,6 @@ kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 .3em; font
     <div id="hopmeta">
       <b id="pos"></b><span id="time"></span><span id="verdict" class="verdict"></span><a id="pid" title="the persistent url of this hop"></a>
     </div>
-    <div id="hopinfo">
-      <div><b>node</b> <span id="i-node"></span></div>
-      <div><b>url</b> <a id="i-url" target="_blank"></a></div>
-      <div><b>summary</b> <span id="i-summary"></span></div>
-    </div>
     <img id="shot" alt="evidence frame" onclick="this.classList.toggle('zoom')">
     <div class="vbuttons">
       <button class="confirm" onclick="setVerdict('confirm')">confirm</button>
@@ -146,6 +141,12 @@ kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 .3em; font
     </div>
   </div>
   <div id="side">
+    <div id="hopinfo">
+      <div><b>node</b> <span id="i-node"></span></div>
+      <div><b>url</b> <a id="i-url" target="_blank"></a></div>
+      <div><b>summary</b> <span id="i-summary"></span></div>
+    </div>
+    <b>transcript</b>
     <div id="transcript"></div>
   </div>
 </main>
@@ -409,6 +410,10 @@ function showTranscript(hop) {
   const to = cur + 1 < reel.hops.length ? hopSec(reel.hops[cur + 1]) : Infinity;
   const el = $("transcript");
   el.innerHTML = "";
+  if (!segments.length) {
+    el.textContent = "no transcript - the reel carries no audio";
+    return;
+  }
   segments.filter(s => s.sec >= from - 5 && s.sec < to).forEach(s => {
     const fb = feedback.segments[s.pos] || {};
     const p = document.createElement("p");
