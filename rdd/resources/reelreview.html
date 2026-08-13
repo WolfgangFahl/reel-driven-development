@@ -410,10 +410,6 @@ function showTranscript(hop) {
   const to = cur + 1 < reel.hops.length ? hopSec(reel.hops[cur + 1]) : Infinity;
   const el = $("transcript");
   el.innerHTML = "";
-  if (!segments.length) {
-    el.textContent = "no transcript - the reel carries no audio";
-    return;
-  }
   segments.filter(s => s.sec >= from - 5 && s.sec < to).forEach(s => {
     const fb = feedback.segments[s.pos] || {};
     const p = document.createElement("p");
