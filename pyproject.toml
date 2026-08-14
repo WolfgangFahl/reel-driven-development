@@ -29,6 +29,15 @@ dependencies = [
   "opencv-python",
   # https://pypi.org/project/tqdm/
   "tqdm",
+  # https://pypi.org/project/fastapi/
+  # the site's web application and its /docs per the OpenAPI docs issue
+  "fastapi",
+  # https://pypi.org/project/uvicorn/
+  # serves the fastapi application
+  "uvicorn",
+  # https://pypi.org/project/swagger-ui-bundle/
+  # the swagger assets served by the site itself - no CDN
+  "swagger-ui-bundle",
 ]
 requires-python = ">=3.10"
 

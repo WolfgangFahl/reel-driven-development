@@ -5,20 +5,22 @@ test the reel site - reels directory, main demo, access rights and delivery
 @author: wf
 """
 
-import http.server
 import json
 import os
 import threading
+import time
 import urllib.error
 import urllib.request
 from typing import Optional, Tuple
 
+import uvicorn
 from basemkit.basetest import Basetest
 
 from rdd.hopset import HopSet
-from rdd.rdd_site import RddSiteConfig, ReelSite, ReelSiteHandler, Review, Reviews
+from rdd.rdd_site import RddSiteConfig, ReelSite, Review, Reviews
 from rdd.recording import Recording
 from rdd.reels import Reel
+from rdd.webapp import create_app
 
 
 class TestRddSite(Basetest):
@@ -116,15 +118,18 @@ class TestReelDelivery(Basetest):
         review = Review(token=self.TOKEN, person="Maria Fahl", reels=["secret-reel"])
         self.site = ReelSite(config, reviews=Reviews(reviews=[review]))
         self.site.reels_found.reels.append(secret)
-        handler = type("TestHandler", (ReelSiteHandler,), {"site": self.site})
-        self.httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
-        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
-        self.base_url = f"http://127.0.0.1:{self.httpd.server_address[1]}"
+        app = create_app(self.site)
+        uv_config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="warning")
+        self.server = uvicorn.Server(uv_config)
+        threading.Thread(target=self.server.run, daemon=True).start()
+        while not self.server.started:
+            time.sleep(0.01)
+        port = self.server.servers[0].sockets[0].getsockname()[1]
+        self.base_url = f"http://127.0.0.1:{port}"
 
     def tearDown(self):
         """Stop the server."""
-        self.httpd.shutdown()
-        self.httpd.server_close()
+        self.server.should_exit = True
         Basetest.tearDown(self)
 
     def get(
@@ -144,9 +149,13 @@ class TestReelDelivery(Basetest):
             request.add_header("Range", range_header)
         try:
             with urllib.request.urlopen(request) as response:
-                result = (response.status, response.read(), dict(response.headers))
+                headers = {
+                    key.lower(): value for key, value in response.headers.items()
+                }
+                result = (response.status, response.read(), headers)
         except urllib.error.HTTPError as http_error:
-            result = (http_error.code, http_error.read(), dict(http_error.headers))
+            headers = {key.lower(): value for key, value in http_error.headers.items()}
+            result = (http_error.code, http_error.read(), headers)
         return result
 
     def testReelPageAndFile(self):
@@ -165,7 +174,7 @@ class TestReelDelivery(Basetest):
         )
         self.assertEqual(206, status)
         self.assertEqual(100, len(body))
-        self.assertIn("bytes 0-99/", headers["Content-Range"])
+        self.assertIn("bytes 0-99/", headers["content-range"])
         status, body, _headers = self.get(
             "/reels/genwiki-walk/genwiki-walk.mp4", range_header="bytes=-100"
         )
@@ -321,10 +330,25 @@ class TestReelDelivery(Basetest):
         for path in ("/nosuchpage", "/reels/nosuchreel/", "/reels/nosuchreel/x.y"):
             status, body, headers = self.get(path)
             self.assertEqual(404, status, path)
-            self.assertIn("text/html", headers["Content-Type"], path)
+            self.assertIn("text/html", headers["content-type"], path)
             self.assertIn(b"<span>home</span>", body, path)
             self.assertIn(b"Example of a valid address", body, path)
             self.assertIn(b"/reels/genwiki-walk/", body, path)
+
+    def testDocs(self):
+        """Test the OpenAPI docs - /docs and /openapi.json answer and the
+        swagger assets come from the site, never from a CDN."""
+        status, body, _headers = self.get("/docs")
+        self.assertEqual(200, status)
+        self.assertIn(b"/static/swagger/swagger-ui-bundle.js", body)
+        self.assertNotIn(b"cdn", body.lower())
+        status, body, _headers = self.get("/openapi.json")
+        self.assertEqual(200, status)
+        api = json.loads(body)
+        self.assertIn("/reels/{address}/api/files", api["paths"])
+        self.assertIn("/reels/{address}/api/{action}", api["paths"])
+        status, _body, headers = self.get("/static/swagger/swagger-ui-bundle.js")
+        self.assertEqual(200, status)
 
     def testEscapeIsNoEscape(self):
         """Test that a path may not leave its reel folder."""

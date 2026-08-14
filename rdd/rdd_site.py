@@ -9,13 +9,9 @@ ADRs: Review UI stack, Home page and menu
 """
 
 import html
-import http.server
-import json
-import mimetypes
 import os
 import re
 import sys
-import time
 import urllib.parse
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
@@ -314,6 +310,33 @@ class ReelSite:
             reel.is_public or Review.WILDCARD in granted or reel.acronym in granted
         )
         return allowed
+
+    def resolve_reel(self, parts: List[str]):
+        """Resolve the addressed reel - shortcut or lengthy form.
+
+        Per the Hop url decision the acronym is the shortcut address
+        and year/month/acronym the lengthy form disambiguating
+        non-unique acronyms.
+
+        Args:
+            parts: the path parts after /reels/ with the token stripped.
+
+        Returns:
+            the reel or None, and the remaining path parts.
+        """
+        reel = None
+        file_parts: List[str] = []
+        if (
+            len(parts) >= 3
+            and re.match(r"\d{4}$", parts[0])
+            and re.match(r"\d{2}$", parts[1])
+        ):
+            reel = self.reels_found.by_pid().get("/".join(parts[:3]))
+            file_parts = [part for part in parts[3:] if part]
+        elif parts:
+            reel = self.reels_found.by_acronym().get(parts[0])
+            file_parts = [part for part in parts[1:] if part]
+        return reel, file_parts
 
     def reel_files(self, reel: Reel) -> List[str]:
         """The files of the given reel folder.
@@ -642,235 +665,6 @@ never mailed, never logged and never minted via this webservice.
         return page
 
 
-class ReelSiteHandler(http.server.BaseHTTPRequestHandler):
-    """Serve the pages of a reel site.
-
-    Reel files are not served here - per the Delivery decision the web server
-    in front does that.
-    """
-
-    site: Optional[ReelSite] = None
-
-    def do_GET(self):
-        """Answer a page request."""
-        pages = {
-            "/": self.site.home,
-            "/index.html": self.site.home,
-            "/reels": self.site.reels,
-            "/reels/": self.site.reels,
-            "/about": self.site.about,
-        }
-        page_of = pages.get(self.path)
-        if page_of is not None:
-            self.respond(page_of().encode())
-            return
-        if self.path.startswith("/reels/"):
-            self.handle_reel(self.path[len("/reels/") :])
-            return
-        self.framed_404()
-
-    def handle_reel(self, rest: str):
-        """Answer a request below /reels/ per the Delivery decision.
-
-        The url is /reels/<acronym>/<file>, optionally carrying the
-        review token first - /reels/<token>/<acronym>/<file> - and per
-        the Hop url decision optionally the lengthy address
-        /reels/<year>/<month>/<acronym>/; a hop slug below the reel
-        answers the review positioned at that hop. A bare
-        token shows the reels directory of its Review. Below the reel,
-        review answers the packaged review page - reelreview.html
-        alike, so a stale copy in a reel folder is shadowed - and
-        api/files, api/info and api/reel answer the page's read api. Unknown
-        tokens, unknown acronyms and denied reels answer alike,
-        tarpitted, so neither tokens nor private acronyms can be
-        probed.
-
-        Args:
-            rest: the path after /reels/.
-        """
-        parts = [urllib.parse.unquote(part) for part in rest.split("/")]
-        review = self.site.reviews.by_token().get(parts[0])
-        if review is not None:
-            parts = parts[1:]
-            if not parts or parts == [""]:
-                self.respond(self.site.reels(review).encode())
-                return
-        reel, file_parts = self.resolve_reel(parts)
-        if reel is None or not self.site.allowed(reel, review):
-            time.sleep(0.5)
-            self.framed_404()
-            return
-        if not file_parts:
-            if not self.path.endswith("/"):
-                # the reel page needs its trailing slash so its relative
-                # review and file links resolve below the reel
-                self.send_response(301)
-                self.send_header("Location", self.path + "/")
-                self.send_header("Content-Length", "0")
-                self.end_headers()
-                return
-            self.respond(self.site.reel_page(reel).encode())
-            return
-        if file_parts in (["review"], ["reelreview.html"]):
-            self.respond(self.site.review_page().encode())
-            return
-        if len(file_parts) == 1 and file_parts[0] in reel.hop_slugs():
-            self.respond(self.site.review_page().encode())
-            return
-        if file_parts == ["api", "files"]:
-            self.respond_json(self.site.reel_files(reel))
-            return
-        if file_parts == ["api", "info"]:
-            self.respond_json({"folder": reel.folder, "acronym": reel.acronym})
-            return
-        if file_parts == ["api", "reel"]:
-            # the hop set parsed by the model - the page never parses YAML
-            self.respond_json(reel.hop_set.to_dict() if reel.hop_set else {})
-            return
-        file_path = os.path.realpath(os.path.join(reel.path, *file_parts))
-        reel_dir = os.path.realpath(reel.path)
-        if not file_path.startswith(reel_dir + os.sep) or not os.path.isfile(file_path):
-            self.framed_404()
-            return
-        self.send_file(file_path)
-
-    def resolve_reel(self, parts: List[str]):
-        """Resolve the addressed reel - shortcut or lengthy form.
-
-        Per the Hop url decision the acronym is the shortcut address
-        and year/month/acronym the lengthy form disambiguating
-        non-unique acronyms.
-
-        Args:
-            parts: the path parts after /reels/ with the token stripped.
-
-        Returns:
-            the reel or None, and the remaining path parts.
-        """
-        reel = None
-        file_parts: List[str] = []
-        if (
-            len(parts) >= 3
-            and re.match(r"\d{4}$", parts[0])
-            and re.match(r"\d{2}$", parts[1])
-        ):
-            reel = self.site.reels_found.by_pid().get("/".join(parts[:3]))
-            file_parts = [part for part in parts[3:] if part]
-        elif parts:
-            reel = self.site.reels_found.by_acronym().get(parts[0])
-            file_parts = [part for part in parts[1:] if part]
-        return reel, file_parts
-
-    def send_file(self, file_path: str):
-        """Send the given file, answering range requests so seeking works.
-
-        Args:
-            file_path: the file to send.
-        """
-        file_size = os.path.getsize(file_path)
-        content_type = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
-        start = 0
-        end = file_size - 1
-        status = 200
-        range_match = re.match(r"bytes=(\d*)-(\d*)$", self.headers.get("Range") or "")
-        if range_match and (range_match.group(1) or range_match.group(2)):
-            if range_match.group(1):
-                start = int(range_match.group(1))
-                if range_match.group(2):
-                    end = min(int(range_match.group(2)), file_size - 1)
-            else:
-                start = max(file_size - int(range_match.group(2)), 0)
-            if start >= file_size or start > end:
-                self.send_response(416)
-                self.send_header("Content-Range", f"bytes */{file_size}")
-                self.end_headers()
-                return
-            status = 206
-        length = end - start + 1
-        self.send_response(status)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Accept-Ranges", "bytes")
-        if status == 206:
-            self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
-        self.send_header("Content-Length", str(length))
-        self.end_headers()
-        with open(file_path, "rb") as reel_file:
-            reel_file.seek(start)
-            remaining = length
-            while remaining > 0:
-                chunk = reel_file.read(min(65536, remaining))
-                if not chunk:
-                    break
-                self.wfile.write(chunk)
-                remaining -= len(chunk)
-
-    def do_POST(self):
-        """Answer the write api of the review page - true inspection mode.
-
-        Per the Reel Review decision a save on this site answers
-        success and stores nothing on the server; server side storage
-        for token holders is the matter of the quick check issue. The
-        request must name an allowed reel, so the write api reveals no
-        more than the read api does.
-        """
-        match = re.match(
-            r"/reels/(.+)/api/(save|feedback|upload)$",
-            urllib.parse.unquote(self.path),
-        )
-        parts = match.group(1).split("/") if match else []
-        review = self.site.reviews.by_token().get(parts[0]) if parts else None
-        if review is not None:
-            parts = parts[1:]
-        directory = self.site.reels_found.by_acronym()
-        reel = directory.get(parts[0]) if len(parts) == 1 else None
-        if reel is None or not self.site.allowed(reel, review):
-            time.sleep(0.5)
-            self.framed_404()
-            return
-        length = int(self.headers.get("Content-Length", 0))
-        self.rfile.read(length)
-        self.send_response(200)
-        self.send_header("Content-Length", "0")
-        self.end_headers()
-
-    def respond_json(self, data) -> None:
-        """Send the given data as a json response.
-
-        Args:
-            data: the payload to serialize.
-        """
-        body = json.dumps(data).encode()
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def framed_404(self):
-        """Answer 404 with the framed page - per the framed 404 issue the
-        error shows like any other page, with an example."""
-        self.respond(self.site.not_found(self.path).encode(), status=404)
-
-    def respond(self, body: bytes, status: int = 200):
-        """Send the given page body as a response.
-
-        Args:
-            body: the encoded html page.
-            status: the http status; 200 by default.
-        """
-        self.send_response(status)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        # pages are dynamic - a browser must revalidate, never show a stale copy
-        self.send_header("Cache-Control", "no-cache")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def log_message(self, format: str, *args):
-        """Log to stdout so the service log carries the requests."""
-        print(f"{self.address_string()} {format % args}", flush=True)
-
-
 def init_command() -> str:
     """The init command as this installation runs it.
 
@@ -889,45 +683,12 @@ def init_command() -> str:
     return command
 
 
-class InstallationHandler(http.server.BaseHTTPRequestHandler):
-    """Serve the installation mode state.
-
-    Per the Owner bootstrap decision a site without reviews.yaml refuses
-    to serve reels and names the init command instead - the site is up
-    and shows what needs to be done; it never serves a reel and never
-    mints.
-    """
-
-    page: bytes = b""
-
-    def do_GET(self):
-        """Answer any request with the installation state."""
-        self.respond()
-
-    def do_POST(self):
-        """Answer any write attempt with the installation state."""
-        self.respond()
-
-    def respond(self):
-        """Send the installation page as service unavailable."""
-        self.send_response(503)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Cache-Control", "no-cache")
-        self.send_header("Content-Length", str(len(self.page)))
-        self.end_headers()
-        self.wfile.write(self.page)
-
-    def log_message(self, format: str, *args):
-        """Log to stdout so the service log carries the requests."""
-        print(f"{self.address_string()} {format % args}", flush=True)
-
-
 def serve(
     config: RddSiteConfig,
     host: str = "127.0.0.1",
     reviews_path: Optional[str] = None,
 ) -> None:
-    """Serve the site of the given configuration.
+    """Serve the site of the given configuration with uvicorn.
 
     Per the Owner bootstrap decision a site without reviews.yaml is in
     installation mode: it stays up, refuses to serve reels and names the
@@ -940,30 +701,28 @@ def serve(
             server in front is what the internet talks to.
         reviews_path: the reviews file; the default path when None.
     """
+    import uvicorn
+
+    from rdd.webapp import create_app, create_installation_app
+
     reviews_file = os.path.expanduser(reviews_path or Reviews.DEFAULT_PATH)
     if not os.path.isfile(reviews_file):
         install_site = ReelSite(config, reels=Reels(), reviews=Reviews())
-        page = install_site.installation(reviews_file).encode()
-        handler = type(
-            "BoundInstallationHandler", (InstallationHandler,), {"page": page}
-        )
+        page = install_site.installation(reviews_file)
         print(
             f"rdd_site: installation mode - no {reviews_file}; run {init_command()}",
             flush=True,
         )
-        with http.server.ThreadingHTTPServer((host, config.port), handler) as httpd:
-            print(
-                f"rdd_site: {config.title} on http://{host}:{config.port}/ "
-                "(installation mode)",
-                flush=True,
-            )
-            httpd.serve_forever()
+        print(
+            f"rdd_site: {config.title} on http://{host}:{config.port}/ "
+            "(installation mode)",
+            flush=True,
+        )
+        uvicorn.run(create_installation_app(page), host=host, port=config.port)
         return
     site = ReelSite(config, reviews=Reviews.of_path(reviews_file))
     main_demo = site.check_main_demo()
     print(f"rdd_site: {site.reels_found.as_summary()}", flush=True)
     print(f"rdd_site: main_demo {main_demo.acronym}", flush=True)
-    handler = type("BoundReelSiteHandler", (ReelSiteHandler,), {"site": site})
-    with http.server.ThreadingHTTPServer((host, config.port), handler) as httpd:
-        print(f"rdd_site: {config.title} on http://{host}:{config.port}/", flush=True)
-        httpd.serve_forever()
+    print(f"rdd_site: {config.title} on http://{host}:{config.port}/", flush=True)
+    uvicorn.run(create_app(site), host=host, port=config.port)
