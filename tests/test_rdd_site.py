@@ -146,7 +146,7 @@ class TestReelDelivery(Basetest):
             with urllib.request.urlopen(request) as response:
                 result = (response.status, response.read(), dict(response.headers))
         except urllib.error.HTTPError as http_error:
-            result = (http_error.code, b"", dict(http_error.headers))
+            result = (http_error.code, http_error.read(), dict(http_error.headers))
         return result
 
     def testReelPageAndFile(self):
@@ -314,6 +314,17 @@ class TestReelDelivery(Basetest):
         status, body, _headers = self.get("/reels/")
         self.assertEqual(200, status)
         self.assertIn(b"genwiki-walk", body)
+
+    def testFramed404(self):
+        """Test the framed 404 - it shows like any other page, with an
+        example of a valid address, on pages and reels alike."""
+        for path in ("/nosuchpage", "/reels/nosuchreel/", "/reels/nosuchreel/x.y"):
+            status, body, headers = self.get(path)
+            self.assertEqual(404, status, path)
+            self.assertIn("text/html", headers["Content-Type"], path)
+            self.assertIn(b"<span>home</span>", body, path)
+            self.assertIn(b"Example of a valid address", body, path)
+            self.assertIn(b"/reels/genwiki-walk/", body, path)
 
     def testEscapeIsNoEscape(self):
         """Test that a path may not leave its reel folder."""

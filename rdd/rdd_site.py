@@ -595,6 +595,33 @@ never mailed, never logged and never minted via this webservice.
         page = self.page("installation mode", content)
         return page
 
+    def not_found(self, path: str) -> str:
+        """The framed 404 page - it shows like any other page, with an
+        example of a valid address.
+
+        Args:
+            path: the path that has no page.
+
+        Returns:
+            the framed 404 page.
+        """
+        example = "/reels"
+        directory = self.reels_found.by_acronym()
+        main_demo = directory.get(self.config.main_demo)
+        if main_demo and main_demo.is_demo:
+            example = self.reel_url(main_demo)
+        content = (
+            "<h2>404 - not found</h2>\n"
+            '<div class="card">\nThere is no page at '
+            f"<code>{html.escape(path)}</code>.\n</div>\n"
+            '<div class="card">\nExample of a valid address: '
+            f'<a href="{html.escape(example)}">{html.escape(example)}</a>; '
+            'the reels of this site are listed under <a href="/reels">reels</a>.'
+            "\n</div>"
+        )
+        page = self.page("not found", content)
+        return page
+
     def about(self) -> str:
         """The about page - version, license and repository."""
         version = self.version
@@ -640,7 +667,7 @@ class ReelSiteHandler(http.server.BaseHTTPRequestHandler):
         if self.path.startswith("/reels/"):
             self.handle_reel(self.path[len("/reels/") :])
             return
-        self.send_error(404)
+        self.framed_404()
 
     def handle_reel(self, rest: str):
         """Answer a request below /reels/ per the Delivery decision.
@@ -671,7 +698,7 @@ class ReelSiteHandler(http.server.BaseHTTPRequestHandler):
         reel, file_parts = self.resolve_reel(parts)
         if reel is None or not self.site.allowed(reel, review):
             time.sleep(0.5)
-            self.send_error(404)
+            self.framed_404()
             return
         if not file_parts:
             if not self.path.endswith("/"):
@@ -703,7 +730,7 @@ class ReelSiteHandler(http.server.BaseHTTPRequestHandler):
         file_path = os.path.realpath(os.path.join(reel.path, *file_parts))
         reel_dir = os.path.realpath(reel.path)
         if not file_path.startswith(reel_dir + os.sep) or not os.path.isfile(file_path):
-            self.send_error(404)
+            self.framed_404()
             return
         self.send_file(file_path)
 
@@ -798,7 +825,7 @@ class ReelSiteHandler(http.server.BaseHTTPRequestHandler):
         reel = directory.get(parts[0]) if len(parts) == 1 else None
         if reel is None or not self.site.allowed(reel, review):
             time.sleep(0.5)
-            self.send_error(404)
+            self.framed_404()
             return
         length = int(self.headers.get("Content-Length", 0))
         self.rfile.read(length)
@@ -819,13 +846,19 @@ class ReelSiteHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def respond(self, body: bytes):
-        """Send the given page body as a successful response.
+    def framed_404(self):
+        """Answer 404 with the framed page - per the framed 404 issue the
+        error shows like any other page, with an example."""
+        self.respond(self.site.not_found(self.path).encode(), status=404)
+
+    def respond(self, body: bytes, status: int = 200):
+        """Send the given page body as a response.
 
         Args:
             body: the encoded html page.
+            status: the http status; 200 by default.
         """
-        self.send_response(200)
+        self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         # pages are dynamic - a browser must revalidate, never show a stale copy
         self.send_header("Cache-Control", "no-cache")
