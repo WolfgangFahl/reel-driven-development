@@ -75,6 +75,27 @@ class TestRddSite(Basetest):
         self.assertIn("NVK-2026-07-12", review_page)
         self.assertIn("Maria Fahl", review_page)
 
+    def testReelsDirectoryLayout(self):
+        """Test the reels directory layout per the dictation of #48 - a
+        video thumbnail per row, hops right aligned, the table on the
+        available width."""
+        page = self.site.reels()
+        self.assertIn('<main class="wide">', page)
+        self.assertIn("main.wide table { width: 100%; }", page)
+        self.assertIn('<th class="num">hops</th>', page)
+        self.assertIn('<td class="num">12</td>', page)
+        self.assertIn(
+            '<img src="/reels/genwiki-walk/hop-00h00m02s.jpg" loading="lazy"', page
+        )
+
+    def testVideoAtTheHop(self):
+        """Test the review page carries the video element per the Video
+        at the hop decision - hidden by default, no foreign host."""
+        page = self.site.review_page()
+        self.assertIn('<video id="player" controls preload="none" hidden>', page)
+        self.assertIn("toggleVideo", page)
+        self.assertIn("seekPlayer", page)
+
     def testReviewPageWearsTheSite(self):
         """Test that the served review page wears the site's palette and
         menu - one source, no second copy."""

@@ -45,6 +45,8 @@ main { display: flex; gap: .8em; padding: .8em; }
 #card { flex: 3; background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: .8em; }
 #side { flex: 2; min-width: 18em; }
 #shot { max-width: 100%; border: 1px solid var(--border); cursor: zoom-in; }
+#player { max-width: 100%; width: 100%; }
+body.videoview #shot { display: none; }
 #shot.zoom { position: fixed; inset: 0; max-width: 100vw; max-height: 100vh; width: 100vw; object-fit: contain; background: #000; z-index: 9; cursor: zoom-out; }
 #hopmeta { display: flex; gap: 1em; align-items: baseline; }
 #hopinfo { font-size: .9em; margin: .3em 0; }
@@ -127,6 +129,7 @@ kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 .3em; font
     <button onclick="step(1)">▶</button>
   </span>
   <a class="folder" href="./" data-i18n="folder" data-i18n-title="folder_title" title="the review folder of this reel">folder</a>
+  <button id="videotoggle" onclick="toggleVideo()" data-i18n-title="video" title="video">🎬</button>
   <span id="send">
     <button onclick="save()" data-i18n="save">save</button>
     <button onclick="download()" data-i18n="download">download</button>
@@ -142,6 +145,7 @@ kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 .3em; font
       <b id="pos"></b><span id="time"></span><span id="verdict" class="verdict"></span><a id="pid" data-i18n-title="pid_title" title="the persistent url of this hop"></a>
     </div>
     <img id="shot" alt="evidence frame" onclick="this.classList.toggle('zoom')">
+    <video id="player" controls preload="none" hidden></video>
     <div class="vbuttons">
       <button class="confirm" onclick="setVerdict('confirm')" data-i18n-title="confirm">✓</button>
       <button class="modify" onclick="setVerdict('modify')" data-i18n-title="modify">❓</button>
@@ -188,7 +192,7 @@ kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 .3em; font
    reel-feedback.yaml stay canonical - only labels are translated. */
 /* <i18n> */
 const LANG = "en";
-const T = {"confirm":"confirm","reject":"reject","hide":"hide","modify":"open question / modify","reject_comment":"reject with comment","open":"open","hop":"hop","save":"save","download":"download","upload":"upload","mail":"mail","folder":"folder","reel_verdict":"reel verdict","reason_text":"reason / text","signature":"pseudo signature","zip":"download reel folder (zip)","reason_opt":"reason (optional)","mod_text":"modification text (required)","node":"node","url":"url","summary":"summary","audio":"audio","saved":"saved reel-feedback.yaml","save_failed":"save failed:","uploaded":"uploaded to","upload_failed":"upload failed:","need_text":"modify needs a text: hop pos","need_signature":"pseudo signature required","folder_title":"the review folder of this reel","zip_title":"the reel folder as one zip","pid_title":"the persistent url of this hop","no_feedback_url":"no feedback_url in reel.yaml config","mail_body":"reel-feedback.yaml saved in the recording folder - attach it from there."};
+const T = {"confirm":"confirm","reject":"reject","hide":"hide","modify":"open question / modify","reject_comment":"reject with comment","open":"open","hop":"hop","save":"save","download":"download","upload":"upload","mail":"mail","folder":"folder","video":"video","reel_verdict":"reel verdict","reason_text":"reason / text","signature":"pseudo signature","zip":"download reel folder (zip)","reason_opt":"reason (optional)","mod_text":"modification text (required)","node":"node","url":"url","summary":"summary","audio":"audio","saved":"saved reel-feedback.yaml","save_failed":"save failed:","uploaded":"uploaded to","upload_failed":"upload failed:","need_text":"modify needs a text: hop pos","need_signature":"pseudo signature required","folder_title":"the review folder of this reel","zip_title":"the reel folder as one zip","pid_title":"the persistent url of this hop","no_feedback_url":"no feedback_url in reel.yaml config","mail_body":"reel-feedback.yaml saved in the recording folder - attach it from there."};
 /* </i18n> */
 function tr(key) { return T[key] || key.replace(/_/g, " "); }
 function translate() {
@@ -251,6 +255,7 @@ async function load() {
   $("reelname").textContent = (reel.recording.durationMin || "?") + " min · " + (reel.config.detector || "?");
   $("total").textContent = "/ " + reel.hops.length;
   $("upload").disabled = !reel.config.feedback_url;
+  $("videotoggle").disabled = !reel.recording.videoFile;
   $("upload").title = reel.config.feedback_url || tr("no_feedback_url");
   if (feedback.reel.signature) $("signature").value = feedback.reel.signature;
   if (feedback.reel.text) $("reel-text").value = feedback.reel.text;
@@ -424,6 +429,7 @@ function go(i) {
     b.classList.toggle("active", !!fb.verdict && b.classList.contains(fb.verdict)));
   showTranscript(hop);
   paintStrip();
+  seekPlayer();
 }
 function paintDetail(fb) {
   const v = fb.verdict;
@@ -497,6 +503,27 @@ function showTranscript(hop) {
   });
 }
 function hopSec(hop) { const m = String(hop.time).match(/(\d+):(\d+)/); return m ? 60 * +m[1] + +m[2] : 0; }
+
+/* the video per the Video at the hop decision - the reel's own video,
+   hidden by default, shown on demand; playback starts at the current
+   hop's time offset and hop navigation re-seeks */
+function toggleVideo() {
+  const player = $("player");
+  const show = player.hidden;
+  if (show && !player.getAttribute("src")) {
+    const videoFile = reel && reel.recording.videoFile;
+    if (!videoFile) return;
+    player.src = encodeURIComponent(videoFile);
+  }
+  player.hidden = !show;
+  document.body.classList.toggle("videoview", show);
+  if (show) seekPlayer();
+}
+function seekPlayer() {
+  const player = $("player");
+  if (player.hidden || !reel || cur >= reel.hops.length) return;
+  player.currentTime = hopSec(reel.hops[cur]);
+}
 
 /* the backup key is the reel's directory - stable while the address bar
    follows the hops */

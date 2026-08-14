@@ -506,6 +506,14 @@ footer {{ padding: .6em .8em; background: var(--primary); color: #fff; font-size
 footer a {{ color: #fff; }}
 table {{ border-collapse: collapse; }}
 td, th {{ text-align: left; padding: .2em .8em .2em 0; }}
+/* the reels directory per the dictation of #48 - the table uses the
+   available width, hops are right aligned, the reel column is wide
+   enough and each row shows the video's thumbnail */
+main.wide {{ max-width: none; }}
+main.wide table {{ width: 100%; }}
+td.num, th.num {{ text-align: right; }}
+td.reel {{ white-space: nowrap; }}
+td.thumb img {{ height: 48px; border: 1px solid var(--border); border-radius: 3px; display: block; }}
 """
         return css
 
@@ -525,13 +533,16 @@ td, th {{ text-align: left; padding: .2em .8em .2em 0; }}
         )
         return flags
 
-    def page(self, title: str, content: str, lang: str = "en") -> str:
+    def page(
+        self, title: str, content: str, lang: str = "en", wide: bool = False
+    ) -> str:
         """Render a page with menu and footer.
 
         Args:
             title: title of the page.
             content: the html of the page body.
             lang: the language of the page.
+            wide: use the available width instead of the reading width.
 
         Returns:
             the complete html page.
@@ -557,7 +568,7 @@ td, th {{ text-align: left; padding: .2em .8em .2em 0; }}
 {links}
   {self.flag_selector(lang)}
 </header>
-<main>
+<main{' class="wide"' if wide else ""}>
 {content}
 </main>
 <footer>{html.escape(self.config.copy_right)} - {self.version.name} {self.version.version}</footer>
@@ -649,18 +660,20 @@ function toggleMenu() {{
             heading = t["review_by"].format(person=review.person)
         if visible_reels:
             rows = "\n".join(
-                f'<tr><td><a href="{html.escape(self.reel_url(reel, review))}">'
+                f'<tr><td class="thumb">{self.reel_thumbnail(reel, review)}</td>'
+                f'<td class="reel">'
+                f'<a href="{html.escape(self.reel_url(reel, review))}">'
                 f"{html.escape(reel.acronym)}</a></td>"
                 f"<td>{html.escape(reel.title)}</td>"
-                f"<td>{reel.hop_count}</td>"
+                f'<td class="num">{reel.hop_count}</td>'
                 f"<td>{html.escape(reel.status)}</td></tr>"
                 for reel in visible_reels
             )
             content = (
                 f'<h2>{topic_svg("Recording", "1.2em")} '
                 f'{html.escape(heading)}</h2>\n<div class="card">\n<table>\n'
-                f'<tr><th>{t["reel"]}</th><th>{t["title"]}</th>'
-                f'<th>{t["hops"]}</th><th>{t["status"]}</th></tr>\n'
+                f'<tr><th></th><th>{t["reel"]}</th><th>{t["title"]}</th>'
+                f'<th class="num">{t["hops"]}</th><th>{t["status"]}</th></tr>\n'
                 f"{rows}\n</table>\n</div>"
             )
         else:
@@ -668,8 +681,31 @@ function toggleMenu() {{
                 f'<h2>{html.escape(heading)}</h2>\n<div class="card">\n'
                 f'{t["no_reels"]}\n</div>'
             )
-        page = self.page(t["reels"], content, lang)
+        page = self.page(t["reels"], content, lang, wide=True)
         return page
+
+    def reel_thumbnail(self, reel: Reel, review: Optional[Review] = None) -> str:
+        """The thumbnail markup of the given reel - the evidence frame of
+        its first hop per the reels directory dictation of #48.
+
+        Args:
+            reel: the reel.
+            review: the review right the urls carry, if any.
+
+        Returns:
+            the linked thumbnail image; empty where the reel has no hop
+            with a frame.
+        """
+        markup = ""
+        hops = reel.hop_set.hops if reel.hop_set else []
+        if hops and hops[0].screenshot:
+            url = self.reel_url(reel, review)
+            src = f"{url}{urllib.parse.quote(hops[0].screenshot)}"
+            markup = (
+                f'<a href="{html.escape(url)}">'
+                f'<img src="{html.escape(src)}" loading="lazy" alt=""></a>'
+            )
+        return markup
 
     def installation(self, reviews_file: str) -> str:
         """The installation mode page - the state a visitor sees while the

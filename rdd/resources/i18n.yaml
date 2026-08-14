@@ -111,6 +111,7 @@ review:
     upload: upload
     mail: mail
     folder: folder
+    video: video
     reel_verdict: reel verdict
     reason_text: reason / text
     signature: pseudo signature
@@ -146,6 +147,7 @@ review:
     upload: hochladen
     mail: Mail
     folder: Ordner
+    video: Video
     reel_verdict: Reel-Urteil
     reason_text: Begründung / Text
     signature: Pseudo-Signatur
