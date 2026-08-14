@@ -102,7 +102,8 @@ review:
     confirm: confirm
     reject: reject
     hide: hide
-    modify: modify
+    modify: open question / modify
+    reject_comment: reject with comment
     open: open
     hop: hop
     save: save
@@ -136,7 +137,8 @@ review:
     confirm: bestätigen
     reject: ablehnen
     hide: verbergen
-    modify: ändern
+    modify: offene Frage / ändern
+    reject_comment: ablehnen mit Kommentar
     open: offen
     hop: Hop
     save: speichern

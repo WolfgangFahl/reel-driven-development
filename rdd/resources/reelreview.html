@@ -87,6 +87,8 @@ nav input { width: 4em; text-align: right; }
 #send { margin-left: auto; display: flex; gap: .5em; align-items: center; }
 #status { font-size: .85em; color: var(--open); }
 #strip { display: flex; overflow-x: auto; gap: 2px; padding: 0 .8em .8em; }
+#strip .thumb { position: relative; display: inline-flex; }
+#strip .thumb i { position: absolute; right: 2px; bottom: 4px; font-style: normal; font-size: .9em; color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000; pointer-events: none; }
 #strip img { height: 40px; opacity: .5; cursor: pointer; border-bottom: 3px solid var(--open); }
 #strip img.cur { opacity: 1; outline: 2px solid var(--fg); }
 #strip img.v-confirm { border-color: var(--confirm); opacity: .9; }
@@ -108,13 +110,13 @@ kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 .3em; font
   <!-- /menu -->
   <span class="app">reelreview</span>
   <span class="counts">
-    <span class="c-confirm"><span data-i18n="confirm">confirm</span> <b id="n-confirm">0</b></span>
-    <span class="c-reject"><span data-i18n="reject">reject</span> <b id="n-reject">0</b></span>
-    <span class="c-hide"><span data-i18n="hide">hide</span> <b id="n-hide">0</b></span>
-    <span class="c-modify"><span data-i18n="modify">modify</span> <b id="n-modify">0</b></span>
-    <span class="c-open"><span data-i18n="open">open</span> <b id="n-open">0</b></span>
+    <span class="c-confirm" data-i18n-title="confirm">✓ <b id="n-confirm">0</b></span>
+    <span class="c-modify" data-i18n-title="modify">❓ <b id="n-modify">0</b></span>
+    <span class="c-reject" data-i18n-title="reject">✗ <b id="n-reject">0</b></span>
+    <span class="c-hide" data-i18n-title="hide">🔒 <b id="n-hide">0</b></span>
+    <span class="c-open" data-i18n-title="open">○ <b id="n-open">0</b></span>
   </span>
-  <span><kbd>c</kbd> <span data-i18n="confirm">confirm</span> <kbd>r</kbd> <span data-i18n="reject">reject</span> <kbd>h</kbd> <span data-i18n="hide">hide</span> <kbd>m</kbd> <span data-i18n="modify">modify</span> <kbd>←</kbd><kbd>→</kbd> <span data-i18n="hop">hop</span> <kbd>s</kbd> <span data-i18n="save">save</span></span>
+  <span><kbd>c</kbd> ✓ <kbd>m</kbd> ❓ <kbd>r</kbd> ✗ <kbd>h</kbd> 🔒 <kbd>←</kbd><kbd>→</kbd> <span data-i18n="hop">hop</span> <kbd>s</kbd> <span data-i18n="save">save</span></span>
 </header>
 <nav>
   <span class="pager">
@@ -140,10 +142,11 @@ kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 .3em; font
     </div>
     <img id="shot" alt="evidence frame" onclick="this.classList.toggle('zoom')">
     <div class="vbuttons">
-      <button class="confirm" onclick="setVerdict('confirm')" data-i18n="confirm">confirm</button>
-      <button class="reject" onclick="setVerdict('reject')" data-i18n="reject">reject</button>
-      <button class="hide" onclick="setVerdict('hide')" data-i18n="hide">hide</button>
-      <button class="modify" onclick="setVerdict('modify')" data-i18n="modify">modify</button>
+      <button class="confirm" onclick="setVerdict('confirm')" data-i18n-title="confirm">✓</button>
+      <button class="modify" onclick="setVerdict('modify')" data-i18n-title="modify">❓</button>
+      <button class="reject" onclick="setVerdict('reject')" data-i18n-title="reject">✗</button>
+      <button class="reject" onclick="setVerdictComment('reject')" data-i18n-title="reject_comment">✗💬</button>
+      <button class="hide" onclick="setVerdict('hide')" data-i18n-title="hide">🔒</button>
     </div>
     <div id="detail">
       <label id="l-reason"><span data-i18n="reason_opt">reason (optional)</span> <input id="f-reason"></label>
@@ -165,10 +168,10 @@ kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 .3em; font
   <div id="reelblock">
   <h2 data-i18n="reel_verdict">reel verdict</h2>
   <div class="vbuttons" id="reelbuttons">
-    <button class="confirm" onclick="setReelVerdict('confirm')" data-i18n="confirm">confirm</button>
-    <button class="reject" onclick="setReelVerdict('reject')" data-i18n="reject">reject</button>
-    <button class="hide" onclick="setReelVerdict('hide')" data-i18n="hide">hide</button>
-    <button class="modify" onclick="setReelVerdict('modify')" data-i18n="modify">modify</button>
+    <button class="confirm" onclick="setReelVerdict('confirm')" data-i18n-title="confirm">✓</button>
+    <button class="modify" onclick="setReelVerdict('modify')" data-i18n-title="modify">❓</button>
+    <button class="reject" onclick="setReelVerdict('reject')" data-i18n-title="reject">✗</button>
+    <button class="hide" onclick="setReelVerdict('hide')" data-i18n-title="hide">🔒</button>
   </div>
   <label><span data-i18n="reason_text">reason / text</span> <input id="reel-text"></label>
   <label><span data-i18n="signature">pseudo signature</span> <input id="signature" placeholder="e.g. 👁️🧑 Wolfgang Fahl"></label>
@@ -184,7 +187,7 @@ kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 .3em; font
    reel-feedback.yaml stay canonical - only labels are translated. */
 /* <i18n> */
 const LANG = "en";
-const T = {"confirm":"confirm","reject":"reject","hide":"hide","modify":"modify","open":"open","hop":"hop","save":"save","download":"download","upload":"upload","mail":"mail","folder":"folder","reel_verdict":"reel verdict","reason_text":"reason / text","signature":"pseudo signature","zip":"download reel folder (zip)","reason_opt":"reason (optional)","mod_text":"modification text (required)","node":"node","url":"url","summary":"summary","audio":"audio","saved":"saved reel-feedback.yaml","save_failed":"save failed:","uploaded":"uploaded to","upload_failed":"upload failed:","need_text":"modify needs a text: hop pos","need_signature":"pseudo signature required","folder_title":"the review folder of this reel","zip_title":"the reel folder as one zip","pid_title":"the persistent url of this hop","no_feedback_url":"no feedback_url in reel.yaml config","mail_body":"reel-feedback.yaml saved in the recording folder - attach it from there."};
+const T = {"confirm":"confirm","reject":"reject","hide":"hide","modify":"open question / modify","reject_comment":"reject with comment","open":"open","hop":"hop","save":"save","download":"download","upload":"upload","mail":"mail","folder":"folder","reel_verdict":"reel verdict","reason_text":"reason / text","signature":"pseudo signature","zip":"download reel folder (zip)","reason_opt":"reason (optional)","mod_text":"modification text (required)","node":"node","url":"url","summary":"summary","audio":"audio","saved":"saved reel-feedback.yaml","save_failed":"save failed:","uploaded":"uploaded to","upload_failed":"upload failed:","need_text":"modify needs a text: hop pos","need_signature":"pseudo signature required","folder_title":"the review folder of this reel","zip_title":"the reel folder as one zip","pid_title":"the persistent url of this hop","no_feedback_url":"no feedback_url in reel.yaml config","mail_body":"reel-feedback.yaml saved in the recording folder - attach it from there."};
 /* </i18n> */
 function tr(key) { return T[key] || key.replace(/_/g, " "); }
 function translate() {
@@ -210,7 +213,10 @@ function q(v) {
   return "'" + s.replace(/'/g, "''") + "'";
 }
 
-const VERDICTS = ["confirm", "reject", "hide", "modify"];
+const VERDICTS = ["confirm", "modify", "reject", "hide"];
+/* the verdict vocabulary of the page is the UTF-8 marker set per #27;
+   reel-feedback.yaml keeps the old words until the format is mended */
+const SYM = { confirm: "✓", modify: "❓", reject: "✗", hide: "🔒", open: "○" };
 let reel = null, segments = [], cur = 0, dirty = false;
 /* feedback: hops[pos] and segments[pos] hold {verdict, reason?, text?, node?, url?, summary?} */
 let feedback = { reel: {}, hops: {}, segments: {} };
@@ -349,17 +355,24 @@ function buildStrip() {
   const strip = $("strip");
   strip.innerHTML = "";
   reel.hops.forEach((hop, i) => {
+    const thumb = document.createElement("span");
+    thumb.className = "thumb";
     const img = document.createElement("img");
     img.src = hop.screenshot; img.loading = "lazy"; img.title = (i + 1) + " " + hop.time;
     img.onclick = () => go(i);
-    strip.appendChild(img);
+    const mark = document.createElement("i");
+    thumb.appendChild(img); thumb.appendChild(mark);
+    strip.appendChild(thumb);
   });
   paintStrip();
 }
 function paintStrip() {
-  [...$("strip").children].forEach((img, i) => {
+  [...$("strip").children].forEach((thumb, i) => {
     const v = (feedback.hops[reel.hops[i].pos] || {}).verdict;
+    const img = thumb.firstChild;
     img.className = (i === cur ? "cur " : "") + (v ? "v-" + v : "");
+    /* the strip speaks the same ✓ ❓ ✗ 🔒 symbols per #27 */
+    thumb.lastChild.textContent = SYM[v] || "";
   });
   counts();
 }
@@ -395,7 +408,7 @@ function go(i) {
   $("i-url").textContent = hop.url || "";
   $("i-url").href = hop.url || "";
   $("i-summary").textContent = hop.summary || "";
-  $("verdict").textContent = fb.verdict || "";
+  $("verdict").textContent = SYM[fb.verdict] || "";
   $("verdict").className = "verdict c-" + (fb.verdict || "open");
   $("shot").src = hop.screenshot;
   $("shot").classList.remove("zoom");
@@ -426,10 +439,20 @@ function setVerdict(v) {
   fb.verdict = fb.verdict === v ? "" : v;
   dirty = true;
   collect(); backup();
-  if (fb.verdict === "modify") { paintDetail(fb); go(cur); $("f-text").focus(); }
-  else if (fb.verdict === "reject" || fb.verdict === "hide") { go(cur); $("f-reason").focus(); }
-  else if (fb.verdict) go(cur + 1);
-  else go(cur);
+  /* per #27 a verdict never interrupts the flow - no field grabs the
+     focus, the walk continues */
+  if (fb.verdict) go(cur + 1); else go(cur);
+}
+function setVerdictComment(v) {
+  /* the comment is its own button - reject with comment; only here the
+     person deliberately asks for the field */
+  if (cur >= reel.hops.length) return;
+  const fb = hopFb(cur);
+  fb.verdict = v;
+  dirty = true;
+  collect(); backup();
+  go(cur);
+  $("f-reason").focus();
 }
 function setReelVerdict(v) {
   feedback.reel.verdict = feedback.reel.verdict === v ? "" : v;
@@ -458,8 +481,8 @@ function showTranscript(hop) {
     const btns = document.createElement("span"); btns.className = "segbtns";
     VERDICTS.forEach(v => {
       const b = document.createElement("button");
-      b.textContent = v[0];
-      b.title = v + (v === "modify" ? " (edit the text for typos)" : "");
+      b.textContent = SYM[v];
+      b.title = tr(v);
       b.onclick = () => {
         const fb2 = segFb(s.pos);
         fb2.verdict = fb2.verdict === v ? "" : v;
@@ -480,11 +503,6 @@ function backupKey() { return "reelreview:" + location.pathname.replace(/[^/]*$/
 function backup() { try { localStorage.setItem(backupKey(), emitFeedback()); } catch (e) {} }
 
 function validate() {
-  const missing = Object.entries(feedback.hops).filter(([p, fb]) => fb.verdict === "modify" && !fb.text);
-  if (missing.length) {
-    $("status").textContent = tr("need_text") + " " + missing.map(([p]) => p).join(", ");
-    return false;
-  }
   if (!$("signature").value) {
     $("status").textContent = tr("need_signature");
     $("signature").focus();
@@ -517,7 +535,7 @@ function mail() {
   save();
   location.href = "mailto:?subject=" + encodeURIComponent("reel-feedback " + (reel.recording.acronym || "")) +
     "&body=" + encodeURIComponent(tr("mail_body") + "\n\n" +
-      tr("reel_verdict") + ": " + (feedback.reel.verdict || "open") + "\n" + tr("signature") + ": " + feedback.reel.signature);
+      tr("reel_verdict") + ": " + (SYM[feedback.reel.verdict] || SYM.open) + "\n" + tr("signature") + ": " + feedback.reel.signature);
 }
 
 document.addEventListener("keydown", e => {
