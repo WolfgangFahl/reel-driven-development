@@ -73,11 +73,12 @@ button.modify.active { background: var(--modify); color: #fff; }
 .segbtns button { font-size: .75em; padding: 0 .35em; border: 1px solid var(--border); border-radius: 3px; background: var(--card); color: var(--fg); cursor: pointer; }
 #reelblock { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: .8em; margin: 0 .8em .8em; }
 #reelblock h2 { font-size: 1em; margin: 0 0 .3em; }
-/* the verdict is its own page per the Reel verdict decision - no hop
-   page carries it, the verdict view hides the hop machinery */
-#reelblock { display: none; }
+/* the verdict is a page of the review per the Reel verdict decision -
+   the position after the last hop in the walk; it keeps the review's
+   chrome and only the hop card and side panel make way for it */
+#reelblock { display: none; flex: 1; margin: 0; }
 body.verdictview #reelblock { display: block; }
-body.verdictview main, body.verdictview #strip, body.verdictview .pager { display: none; }
+body.verdictview #card, body.verdictview #side { display: none; }
 #reelactions { margin-top: .6em; display: flex; gap: .8em; align-items: center; flex-wrap: wrap; }
 #reelactions a { color: var(--primary); }
 nav a.folder { color: var(--primary); text-decoration: none; }
@@ -107,13 +108,13 @@ kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 .3em; font
   <!-- /menu -->
   <span class="app">reelreview</span>
   <span class="counts">
-    <span class="c-confirm">confirm <b id="n-confirm">0</b></span>
-    <span class="c-reject">reject <b id="n-reject">0</b></span>
-    <span class="c-hide">hide <b id="n-hide">0</b></span>
-    <span class="c-modify">modify <b id="n-modify">0</b></span>
-    <span class="c-open">open <b id="n-open">0</b></span>
+    <span class="c-confirm"><span data-i18n="confirm">confirm</span> <b id="n-confirm">0</b></span>
+    <span class="c-reject"><span data-i18n="reject">reject</span> <b id="n-reject">0</b></span>
+    <span class="c-hide"><span data-i18n="hide">hide</span> <b id="n-hide">0</b></span>
+    <span class="c-modify"><span data-i18n="modify">modify</span> <b id="n-modify">0</b></span>
+    <span class="c-open"><span data-i18n="open">open</span> <b id="n-open">0</b></span>
   </span>
-  <span><kbd>c</kbd> confirm <kbd>r</kbd> reject <kbd>h</kbd> hide <kbd>m</kbd> modify <kbd>←</kbd><kbd>→</kbd> hop <kbd>s</kbd> save</span>
+  <span><kbd>c</kbd> <span data-i18n="confirm">confirm</span> <kbd>r</kbd> <span data-i18n="reject">reject</span> <kbd>h</kbd> <span data-i18n="hide">hide</span> <kbd>m</kbd> <span data-i18n="modify">modify</span> <kbd>←</kbd><kbd>→</kbd> <span data-i18n="hop">hop</span> <kbd>s</kbd> <span data-i18n="save">save</span></span>
 </header>
 <nav>
   <span class="pager">
@@ -122,12 +123,12 @@ kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 .3em; font
     <span id="total"></span>
     <button onclick="go(cur+1)">▶</button>
   </span>
-  <a class="folder" href="./" title="the review folder of this reel">folder</a>
+  <a class="folder" href="./" data-i18n="folder" data-i18n-title="folder_title" title="the review folder of this reel">folder</a>
   <span id="send">
-    <button onclick="save()">save</button>
-    <button onclick="download()">download</button>
-    <button id="upload" onclick="upload()">upload</button>
-    <button onclick="mail()">mail</button>
+    <button onclick="save()" data-i18n="save">save</button>
+    <button onclick="download()" data-i18n="download">download</button>
+    <button id="upload" onclick="upload()" data-i18n="upload">upload</button>
+    <button onclick="mail()" data-i18n="mail">mail</button>
     <span id="status"></span>
   </span>
 </nav>
@@ -135,50 +136,63 @@ kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 .3em; font
 <main>
   <div id="card">
     <div id="hopmeta">
-      <b id="pos"></b><span id="time"></span><span id="verdict" class="verdict"></span><a id="pid" title="the persistent url of this hop"></a>
+      <b id="pos"></b><span id="time"></span><span id="verdict" class="verdict"></span><a id="pid" data-i18n-title="pid_title" title="the persistent url of this hop"></a>
     </div>
     <img id="shot" alt="evidence frame" onclick="this.classList.toggle('zoom')">
     <div class="vbuttons">
-      <button class="confirm" onclick="setVerdict('confirm')">confirm</button>
-      <button class="reject" onclick="setVerdict('reject')">reject</button>
-      <button class="hide" onclick="setVerdict('hide')">hide</button>
-      <button class="modify" onclick="setVerdict('modify')">modify</button>
+      <button class="confirm" onclick="setVerdict('confirm')" data-i18n="confirm">confirm</button>
+      <button class="reject" onclick="setVerdict('reject')" data-i18n="reject">reject</button>
+      <button class="hide" onclick="setVerdict('hide')" data-i18n="hide">hide</button>
+      <button class="modify" onclick="setVerdict('modify')" data-i18n="modify">modify</button>
     </div>
     <div id="detail">
-      <label id="l-reason">reason (optional) <input id="f-reason"></label>
-      <label id="l-text">modification text (required) <textarea id="f-text" rows="2"></textarea></label>
-      <label>node <input id="f-node"></label>
-      <label>url <input id="f-url"></label>
-      <label>summary <textarea id="f-summary" rows="2"></textarea></label>
+      <label id="l-reason"><span data-i18n="reason_opt">reason (optional)</span> <input id="f-reason"></label>
+      <label id="l-text"><span data-i18n="mod_text">modification text (required)</span> <textarea id="f-text" rows="2"></textarea></label>
+      <label><span data-i18n="node">node</span> <input id="f-node"></label>
+      <label><span data-i18n="url">url</span> <input id="f-url"></label>
+      <label><span data-i18n="summary">summary</span> <textarea id="f-summary" rows="2"></textarea></label>
     </div>
   </div>
   <div id="side">
     <div id="hopinfo">
-      <div><b>node</b> <span id="i-node"></span></div>
-      <div><b>url</b> <a id="i-url" target="_blank"></a></div>
-      <div><b>summary</b> <span id="i-summary"></span></div>
+      <div><b data-i18n="node">node</b> <span id="i-node"></span></div>
+      <div><b data-i18n="url">url</b> <a id="i-url" target="_blank"></a></div>
+      <div><b data-i18n="summary">summary</b> <span id="i-summary"></span></div>
     </div>
-    <b>audio</b>
+    <b data-i18n="audio">audio</b>
     <div id="transcript"></div>
   </div>
-</main>
-<div id="reelblock">
-  <h2>reel verdict</h2>
+  <div id="reelblock">
+  <h2 data-i18n="reel_verdict">reel verdict</h2>
   <div class="vbuttons" id="reelbuttons">
-    <button class="confirm" onclick="setReelVerdict('confirm')">confirm</button>
-    <button class="reject" onclick="setReelVerdict('reject')">reject</button>
-    <button class="hide" onclick="setReelVerdict('hide')">hide</button>
-    <button class="modify" onclick="setReelVerdict('modify')">modify</button>
+    <button class="confirm" onclick="setReelVerdict('confirm')" data-i18n="confirm">confirm</button>
+    <button class="reject" onclick="setReelVerdict('reject')" data-i18n="reject">reject</button>
+    <button class="hide" onclick="setReelVerdict('hide')" data-i18n="hide">hide</button>
+    <button class="modify" onclick="setReelVerdict('modify')" data-i18n="modify">modify</button>
   </div>
-  <label>reason / text <input id="reel-text"></label>
-  <label>pseudo signature <input id="signature" placeholder="e.g. 👁️🧑 Wolfgang Fahl"></label>
+  <label><span data-i18n="reason_text">reason / text</span> <input id="reel-text"></label>
+  <label><span data-i18n="signature">pseudo signature</span> <input id="signature" placeholder="e.g. 👁️🧑 Wolfgang Fahl"></label>
   <div id="reelactions">
-    <button onclick="startPass()">review the hops</button>
-    <a href="api/zip" title="the reel folder as one zip">download reel folder (zip)</a>
+    <button onclick="startPass()" data-i18n="review_hops">review the hops</button>
+    <a href="api/zip" data-i18n="zip" data-i18n-title="zip_title" title="the reel folder as one zip">download reel folder (zip)</a>
   </div>
-</div>
+  </div>
+</main>
 <script>
 "use strict";
+/* i18n - the site serves this block in the visitor's language; the
+   packaged page speaks english on its own. The verdict words of
+   reel-feedback.yaml stay canonical - only labels are translated. */
+/* <i18n> */
+const LANG = "en";
+const T = {"confirm":"confirm","reject":"reject","hide":"hide","modify":"modify","open":"open","hop":"hop","save":"save","download":"download","upload":"upload","mail":"mail","folder":"folder","reel_verdict":"reel verdict","reason_text":"reason / text","signature":"pseudo signature","review_hops":"review the hops","zip":"download reel folder (zip)","reason_opt":"reason (optional)","mod_text":"modification text (required)","node":"node","url":"url","summary":"summary","audio":"audio","saved":"saved reel-feedback.yaml","save_failed":"save failed:","uploaded":"uploaded to","upload_failed":"upload failed:","need_text":"modify needs a text: hop pos","need_signature":"pseudo signature required","folder_title":"the review folder of this reel","zip_title":"the reel folder as one zip","pid_title":"the persistent url of this hop","no_feedback_url":"no feedback_url in reel.yaml config","mail_body":"reel-feedback.yaml saved in the recording folder - attach it from there."};
+/* </i18n> */
+function tr(key) { return T[key] || key.replace(/_/g, " "); }
+function translate() {
+  document.documentElement.lang = LANG;
+  document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = tr(el.dataset.i18n); });
+  document.querySelectorAll("[data-i18n-title]").forEach(el => { el.title = tr(el.dataset.i18nTitle); });
+}
 /* hamburger - hides the header the way the ngwidgets applications do */
 function toggleMenu() {
   const collapsed = document.body.classList.toggle('collapsed');
@@ -231,7 +245,7 @@ async function load() {
   $("reelname").textContent = (reel.recording.durationMin || "?") + " min · " + (reel.config.detector || "?");
   $("total").textContent = "/ " + reel.hops.length;
   $("upload").disabled = !reel.config.feedback_url;
-  $("upload").title = reel.config.feedback_url || "no feedback_url in reel.yaml config";
+  $("upload").title = reel.config.feedback_url || tr("no_feedback_url");
   if (feedback.reel.signature) $("signature").value = feedback.reel.signature;
   if (feedback.reel.text) $("reel-text").value = feedback.reel.text;
   paintReelVerdict();
@@ -243,13 +257,16 @@ async function load() {
   if (start >= 0) go(start); else showVerdict();
 }
 
-/* the verdict page per the Reel verdict decision - its own address,
-   opened first and returned to when the pass is done */
+/* the verdict page per the Reel verdict decision - a page of the
+   review at the position after the last hop, opened first and
+   returned to when the pass is done */
 function showVerdict() {
   if (!reel) return;
   collect();
+  cur = reel.hops.length;
   document.body.classList.add("verdictview");
   history.replaceState(null, "", "verdict");
+  $("jump").value = "";
   paintReelVerdict();
   paintStrip();
 }
@@ -309,6 +326,9 @@ function hopFb(i) {
 }
 function collect() {
   if (!reel) return;
+  feedback.reel.text = $("reel-text").value;
+  feedback.reel.signature = $("signature").value;
+  if (cur >= reel.hops.length) return;
   const fb = hopFb(cur), hop = reel.hops[cur];
   fb.reason = $("f-reason").value;
   fb.text = $("f-text").value;
@@ -316,8 +336,6 @@ function collect() {
     for (const k of ["node", "url", "summary"])
       if ($("f-" + k).value !== (hop[k] || "")) fb[k] = $("f-" + k).value;
   }
-  feedback.reel.text = $("reel-text").value;
-  feedback.reel.signature = $("signature").value;
 }
 
 function buildStrip() {
@@ -349,9 +367,9 @@ function slugOf(hop) {
   return hop.screenshot ? hop.screenshot.split("/").pop().replace(/\.[^.]+$/, "") : "";
 }
 function go(i) {
-  if (!reel || i < 0) return;
-  /* past the last hop the pass is done - return to the verdict page */
-  if (i >= reel.hops.length) { showVerdict(); return; }
+  if (!reel || i < 0 || i > reel.hops.length) return;
+  /* past the last hop the pass is done - the verdict page follows */
+  if (i === reel.hops.length) { showVerdict(); return; }
   document.body.classList.remove("verdictview");
   collect();
   cur = i;
@@ -364,7 +382,7 @@ function go(i) {
     $("pid").textContent = slug;
     $("pid").href = encodeURIComponent(slug);
   }
-  $("pos").textContent = "hop " + (cur + 1);
+  $("pos").textContent = tr("hop") + " " + (cur + 1);
   $("time").textContent = hop.time;
   $("i-node").textContent = hop.node || "";
   $("i-url").textContent = hop.url || "";
@@ -396,6 +414,7 @@ function paintDetail(fb) {
 }
 
 function setVerdict(v) {
+  if (cur >= reel.hops.length) return;
   const fb = hopFb(cur);
   fb.verdict = fb.verdict === v ? "" : v;
   dirty = true;
@@ -456,11 +475,11 @@ function backup() { try { localStorage.setItem(backupKey(), emitFeedback()); } c
 function validate() {
   const missing = Object.entries(feedback.hops).filter(([p, fb]) => fb.verdict === "modify" && !fb.text);
   if (missing.length) {
-    $("status").textContent = "modify needs a text: hop pos " + missing.map(([p]) => p).join(", ");
+    $("status").textContent = tr("need_text") + " " + missing.map(([p]) => p).join(", ");
     return false;
   }
   if (!$("signature").value) {
-    $("status").textContent = "pseudo signature required";
+    $("status").textContent = tr("need_signature");
     $("signature").focus();
     return false;
   }
@@ -471,7 +490,7 @@ function validate() {
 async function save() {
   collect(); backup();
   const res = await fetch("api/feedback", { method: "POST", body: emitFeedback() });
-  $("status").textContent = res.ok ? "saved reel-feedback.yaml " + new Date().toLocaleTimeString() : "save failed: " + res.status;
+  $("status").textContent = res.ok ? tr("saved") + " " + new Date().toLocaleTimeString() : tr("save_failed") + " " + res.status;
   if (res.ok) dirty = false;
 }
 function download() {
@@ -484,25 +503,19 @@ function download() {
 async function upload() {
   collect(); if (!validate()) return;
   const res = await fetch("api/upload", { method: "POST", body: emitFeedback() });
-  $("status").textContent = res.ok ? "uploaded to " + reel.config.feedback_url : "upload failed: " + res.status;
+  $("status").textContent = res.ok ? tr("uploaded") + " " + reel.config.feedback_url : tr("upload_failed") + " " + res.status;
 }
 function mail() {
   collect(); if (!validate()) return;
   save();
   location.href = "mailto:?subject=" + encodeURIComponent("reel-feedback " + (reel.recording.acronym || "")) +
-    "&body=" + encodeURIComponent("reel-feedback.yaml saved in the recording folder - attach it from there.\n\n" +
-      "reel verdict: " + (feedback.reel.verdict || "open") + "\nsignature: " + feedback.reel.signature);
+    "&body=" + encodeURIComponent(tr("mail_body") + "\n\n" +
+      tr("reel_verdict") + ": " + (feedback.reel.verdict || "open") + "\n" + tr("signature") + ": " + feedback.reel.signature);
 }
 
 document.addEventListener("keydown", e => {
   if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable) return;
   const k = e.key;
-  if (document.body.classList.contains("verdictview")) {
-    /* on the verdict page only stepping back into the pass and saving */
-    const back = { ArrowLeft: () => go(reel.hops.length - 1), s: save };
-    if (back[k]) { e.preventDefault(); back[k](); }
-    return;
-  }
   const actions = {
     c: () => setVerdict("confirm"), r: () => setVerdict("reject"),
     h: () => setVerdict("hide"), m: () => setVerdict("modify"),
@@ -511,6 +524,7 @@ document.addEventListener("keydown", e => {
   if (actions[k]) { e.preventDefault(); actions[k](); }
 });
 window.addEventListener("beforeunload", e => { if (dirty) e.preventDefault(); });
+translate();
 load();
 </script>
 </body>

@@ -131,6 +131,99 @@ TEXTS: Dict[str, Dict[str, str]] = {
 }
 
 
+REVIEW_TEXTS: Dict[str, Dict[str, str]] = {
+    "en": {
+        "confirm": "confirm",
+        "reject": "reject",
+        "hide": "hide",
+        "modify": "modify",
+        "open": "open",
+        "hop": "hop",
+        "save": "save",
+        "download": "download",
+        "upload": "upload",
+        "mail": "mail",
+        "folder": "folder",
+        "reel_verdict": "reel verdict",
+        "reason_text": "reason / text",
+        "signature": "pseudo signature",
+        "review_hops": "review the hops",
+        "zip": "download reel folder (zip)",
+        "reason_opt": "reason (optional)",
+        "mod_text": "modification text (required)",
+        "node": "node",
+        "url": "url",
+        "summary": "summary",
+        "audio": "audio",
+        "saved": "saved reel-feedback.yaml",
+        "save_failed": "save failed:",
+        "uploaded": "uploaded to",
+        "upload_failed": "upload failed:",
+        "need_text": "modify needs a text: hop pos",
+        "need_signature": "pseudo signature required",
+        "folder_title": "the review folder of this reel",
+        "zip_title": "the reel folder as one zip",
+        "pid_title": "the persistent url of this hop",
+        "no_feedback_url": "no feedback_url in reel.yaml config",
+        "mail_body": (
+            "reel-feedback.yaml saved in the recording folder - "
+            "attach it from there."
+        ),
+    },
+    "de": {
+        "confirm": "bestätigen",
+        "reject": "ablehnen",
+        "hide": "verbergen",
+        "modify": "ändern",
+        "open": "offen",
+        "hop": "Hop",
+        "save": "speichern",
+        "download": "herunterladen",
+        "upload": "hochladen",
+        "mail": "Mail",
+        "folder": "Ordner",
+        "reel_verdict": "Reel-Urteil",
+        "reason_text": "Begründung / Text",
+        "signature": "Pseudo-Signatur",
+        "review_hops": "die Hops begutachten",
+        "zip": "Reel-Ordner herunterladen (zip)",
+        "reason_opt": "Begründung (optional)",
+        "mod_text": "Änderungstext (erforderlich)",
+        "node": "Knoten",
+        "url": "URL",
+        "summary": "Zusammenfassung",
+        "audio": "Audio",
+        "saved": "reel-feedback.yaml gespeichert",
+        "save_failed": "Speichern fehlgeschlagen:",
+        "uploaded": "hochgeladen nach",
+        "upload_failed": "Hochladen fehlgeschlagen:",
+        "need_text": "ändern braucht einen Text: Hop pos",
+        "need_signature": "Pseudo-Signatur erforderlich",
+        "folder_title": "der Begutachtungsordner dieses Reels",
+        "zip_title": "der Reel-Ordner als ein Zip",
+        "pid_title": "die persistente URL dieses Hops",
+        "no_feedback_url": "kein feedback_url in der reel.yaml Konfiguration",
+        "mail_body": (
+            "reel-feedback.yaml liegt gespeichert im Aufnahmeordner - "
+            "von dort anhängen."
+        ),
+    },
+}
+
+
+def review_texts(lang: str) -> Dict[str, str]:
+    """The review page texts of the given language.
+
+    Args:
+        lang: the language code.
+
+    Returns:
+        the texts; english where the language is not carried.
+    """
+    lang_texts = REVIEW_TEXTS.get(lang, REVIEW_TEXTS["en"])
+    return lang_texts
+
+
 def texts(lang: str) -> Dict[str, str]:
     """The texts of the given language.
 

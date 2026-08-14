@@ -9,6 +9,7 @@ ADRs: Review UI stack, Home page and menu
 """
 
 import html
+import json
 import os
 import re
 import sys
@@ -20,7 +21,7 @@ from typing import Dict, List, Optional
 
 from basemkit.yamlable import lod_storable
 
-from rdd.i18n import FLAGS, LANGUAGES, texts
+from rdd.i18n import FLAGS, LANGUAGES, review_texts, texts
 from rdd.icons import svg
 from rdd.palette import Palette, Palettes
 from rdd.reelreview import page_path
@@ -395,29 +396,42 @@ class ReelSite:
         page = self.page(reel.acronym, content, lang)
         return page
 
-    def review_page(self) -> str:
+    def review_page(self, lang: str = "en") -> str:
         """The review page of this site.
 
         Per the Review UI stack decision the packaged page is one
         self-contained file; serving it, the site derives the CSS
-        variables from its named palette and puts its own menu into
-        the marked header slot, so the review wears the same palette
-        and menu as every other page of the site - one source, no
-        second copy to keep in step.
+        variables from its named palette, puts its own menu into
+        the marked header slot and speaks the visitor's language via
+        the marked i18n slot, so the review wears the same palette,
+        menu and language as every other page of the site - one
+        source, no second copy to keep in step.
+
+        Args:
+            lang: the language of the page.
 
         Returns:
-            the review page in the site's palette with the site's menu.
+            the review page in the site's palette, menu and language.
         """
         page = page_path().read_text()
         for name, value in self.palette.__dict__.items():
             page = re.sub(rf"--{name}: #[0-9A-Fa-f]+;", f"--{name}: {value};", page)
-        links = "\n".join(entry.as_html() for entry in self.menu())
+        links = "\n".join(entry.as_html() for entry in self.menu(lang))
         page = re.sub(
             r"<!-- menu -->.*?<!-- /menu -->",
             f"<!-- menu -->\n{links}\n  <!-- /menu -->",
             page,
             flags=re.DOTALL,
         )
+        translations = json.dumps(review_texts(lang), ensure_ascii=False)
+        page = re.sub(
+            r"/\* <i18n> \*/.*?/\* </i18n> \*/",
+            f'/* <i18n> */\nconst LANG = "{lang}";\n'
+            f"const T = {translations};\n/* </i18n> */",
+            page,
+            flags=re.DOTALL,
+        )
+        page = page.replace('<html lang="en">', f'<html lang="{lang}">', 1)
         return page
 
     def reel_zip(self, reel: Reel) -> str:

@@ -355,9 +355,9 @@ class ReelApp:
                     return RedirectResponse(path + "/", status_code=301)
                 return remember_lang(request, page_response(site.reel_page(reel, lang)))
             if file_parts in (["review"], ["reelreview.html"], ["verdict"]):
-                return page_response(site.review_page())
+                return remember_lang(request, page_response(site.review_page(lang)))
             if len(file_parts) == 1 and file_parts[0] in reel.hop_slugs():
-                return page_response(site.review_page())
+                return remember_lang(request, page_response(site.review_page(lang)))
             file_path = os.path.realpath(os.path.join(reel.path, *file_parts))
             reel_dir = os.path.realpath(reel.path)
             if not file_path.startswith(reel_dir + os.sep) or not os.path.isfile(

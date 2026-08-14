@@ -85,6 +85,22 @@ class TestRddSite(Basetest):
         self.assertIn("<span>home</span>", page)
         self.assertIn("<span>about</span>", page)
 
+    def testReviewPageI18n(self):
+        """Test that the review page speaks the visitor's language like
+        every page of the site - full i18n per the i18n issue; the
+        verdict vocabulary of reel-feedback.yaml stays canonical."""
+        page = self.site.review_page("de")
+        self.assertIn('<html lang="de">', page)
+        self.assertIn('const LANG = "de";', page)
+        self.assertIn("Reel-Urteil", page)
+        self.assertIn("bestätigen", page)
+        self.assertIn("<span>über</span>", page)
+        # the yaml vocabulary is untouched - the buttons still set canonical verdicts
+        self.assertIn("setVerdict('confirm')", page)
+        page_en = self.site.review_page()
+        self.assertIn('const LANG = "en";', page_en)
+        self.assertIn('"reel_verdict": "reel verdict"', page_en)
+
     def testAboutAndMenu(self):
         """Test that the about page names version, license and repository."""
         about = self.site.about()
@@ -375,6 +391,14 @@ class TestReelDelivery(Basetest):
         """Test that a path may not leave its reel folder."""
         status, _body, _headers = self.get("/reels/genwiki-walk/../persons.yaml")
         self.assertEqual(404, status)
+
+    def testReviewPageLanguage(self):
+        """Test that the served review page answers in the requested language
+        like every other page."""
+        status, body, _headers = self.get("/reels/genwiki-walk/review?lang=de")
+        self.assertEqual(200, status)
+        self.assertIn("Reel-Urteil".encode(), body)
+        self.assertIn('<html lang="de">'.encode(), body)
 
     def testVerdictPage(self):
         """Test that the verdict is its own page per the Reel verdict
