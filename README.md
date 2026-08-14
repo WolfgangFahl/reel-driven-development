@@ -9,6 +9,13 @@ Reel Driven Development (RDD) - turn recorded user walks (reels) into domain sto
 | **Code** | [![style-black](https://img.shields.io/badge/%20style-black-000000.svg)](https://github.com/psf/black) [![imports-isort](https://img.shields.io/badge/%20imports-isort-%231674b1)](https://pycqa.github.io/isort/) |
 | **Docs** | [![API Docs](https://img.shields.io/badge/API-Documentation-blue)](https://WolfgangFahl.github.io/reel-driven-development/) [![formatter-docformatter](https://img.shields.io/badge/%20formatter-docformatter-fedcba.svg)](https://github.com/PyCQA/docformatter) [![style-google](https://img.shields.io/badge/%20style-google-3666d6.svg)](https://google.github.io/styleguide/pyguide.html#s3.8-comments-and-docstrings) |
 
+## Demo
+
+See a reel for yourself: the [GenWiki demo reel](https://rdd.bitplan.com/reels/RDD-GenWiki-Example/)
+(7 hops) on [rdd.bitplan.com](https://rdd.bitplan.com) - true inspection mode,
+your verdicts stay on your device. Reviewers get a link by mail - no account,
+no password.
+
 ## Documentation
 [Wiki](https://wiki.bitplan.com/index.php/Reel_Driven_Development)
 
@@ -27,8 +34,10 @@ walks through a system while talking. RDD treats the reel as a graph walk:
 * findings become outcome objects: a frustration spoken during a walk becomes
   a bug report, which is an acceptance criterion, which is an example
 
-The first tooling milestone is HopDetection - see
-[issue #1](https://github.com/WolfgangFahl/reel-driven-development/issues/1).
+HopDetection was the first step -
+[issue #1](https://github.com/WolfgangFahl/reel-driven-development/issues/1);
+the requirements epic is
+[issue #7](https://github.com/WolfgangFahl/reel-driven-development/issues/7).
 
 ## rdd - the one command name
 
@@ -45,7 +54,7 @@ one name - the name of what we do:
 `rdd` without a subcommand lists them; the tool names stay available as
 entry points of their own.
 
-## hopdetect flags
+## rdd detect flags
 
 | flag | meaning | default | change it when |
 | --- | --- | --- | --- |
@@ -55,7 +64,7 @@ entry points of their own.
 | `--out` | output directory for the evidence frames, `hops.yaml` and `config.yaml` | `hops` | keeping several hop sets apart |
 | `--progress` | show the progress bar of the running detection | off | a run over a long reel must not be silent ([issue #6](https://github.com/WolfgangFahl/reel-driven-development/issues/6)) |
 
-`hopdetect --help` lists these together with the standard options of
+`rdd detect --help` lists these together with the standard options of
 [pybasemkit](https://github.com/WolfgangFahl/pybasemkit#cli-tooling).
 
 ## Detectors
@@ -68,7 +77,7 @@ Each detector is on offer at its library default and at half and double its
 threshold. `ThresholdDetector` is not on offer: it detects fades to a
 near-black level.
 
-Cuts found on [examples/genwiki-walk](examples/genwiki-walk) - 1501 frames,
+Cuts found on [examples/recordings/genwiki-walk](examples/recordings/genwiki-walk) - 1501 frames,
 60 s, about 1.4 s per run:
 
 | detector | half | default | double |
@@ -94,11 +103,12 @@ A run writes to `--out`:
 ## Example: GenWiki walk
 
 ```bash
-hopdetect examples/genwiki-walk/genwiki-walk.mp4 --detector Content --out hops
+rdd detect examples/recordings/genwiki-walk/genwiki-walk.mp4 --detector Content --out hops
 genwiki-walk.mp4: 9 hops from Content over 1501 frames -> hops
 ```
 
-Raw results of an earlier run in [examples/genwiki-walk](examples/genwiki-walk).
+Raw results of an earlier run in
+[examples/recordings/genwiki-walk](examples/recordings/genwiki-walk).
 
 ## Known gaps
 
@@ -106,5 +116,5 @@ Raw results of an earlier run in [examples/genwiki-walk](examples/genwiki-walk).
   can still decide hop boundaries
   ([issue #5](https://github.com/WolfgangFahl/reel-driven-development/issues/5))
 * there is no machine-readable progress stream for an agent driving a run
-  ([issue #7](https://github.com/WolfgangFahl/reel-driven-development/issues/7))
+  ([issue #36](https://github.com/WolfgangFahl/reel-driven-development/issues/36))
 * transcript-anchored capture of a named moment is not implemented
