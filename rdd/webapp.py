@@ -14,7 +14,7 @@ swagger assets are served by the site, never by a CDN.
 import os
 import time
 import urllib.parse
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from fastapi import FastAPI, Request
 from fastapi.openapi.docs import get_swagger_ui_html
@@ -26,6 +26,45 @@ from rdd.i18n import LANGUAGES, pick_language
 from rdd.rdd_site import Reel, ReelSite, Review
 
 TARPIT_SECONDS = 0.5
+
+
+class RateLimit:
+    """Per-client limit on missed lookups.
+
+    Per the Reel Review decision unknown tokens are rate-limited: every
+    miss is tarpitted, and a client whose misses exceed the limit within
+    the window answers 429 until the window has passed.
+    """
+
+    def __init__(self, max_misses: int = 10, window_seconds: float = 60.0):
+        """Initialize the limit.
+
+        Args:
+            max_misses: the misses a client may accumulate per window.
+            window_seconds: the sliding window in seconds.
+        """
+        self.max_misses = max_misses
+        self.window_seconds = window_seconds
+        self.misses: Dict[str, List[float]] = {}
+
+    def miss(self, client: str, now: Optional[float] = None) -> bool:
+        """Record a miss for the given client.
+
+        Args:
+            client: the client address the miss counts against.
+            now: the time of the miss; the monotonic clock by default.
+
+        Returns:
+            True where the client is over the limit.
+        """
+        if now is None:
+            now = time.monotonic()
+        cutoff = now - self.window_seconds
+        timestamps = [t for t in self.misses.get(client, []) if t > cutoff]
+        timestamps.append(now)
+        self.misses[client] = timestamps
+        over_limit = len(timestamps) > self.max_misses
+        return over_limit
 
 
 def lang_of(request: Request) -> str:
@@ -93,6 +132,8 @@ class ReelApp:
             site: the reel site.
         """
         self.site = site
+        self.tarpit_seconds = TARPIT_SECONDS
+        self.rate_limit = RateLimit()
         self.app = FastAPI(
             title=site.config.title,
             version=site.version.version,
@@ -113,23 +154,31 @@ class ReelApp:
         )
         self.add_routes()
 
-    def not_found(
-        self, path: str, tarpit: bool = False, lang: str = "en"
-    ) -> HTMLResponse:
+    def not_found(self, request: Request, tarpit: bool = False) -> HTMLResponse:
         """The framed 404 response.
 
         Args:
-            path: the path that has no page.
+            request: the request that has no page.
             tarpit: delay the answer so tokens and private acronyms
-                cannot be probed.
-            lang: the language of the page.
+                cannot be probed; a client over the rate limit
+                answers 429 instead.
 
         Returns:
-            the framed 404 page as a response.
+            the framed 404 page as a response; 429 over the limit.
         """
+        path = request.url.path
+        lang = lang_of(request)
+        page = self.site.not_found(path, lang)
+        status = 404
         if tarpit:
-            time.sleep(TARPIT_SECONDS)
-        response = page_response(self.site.not_found(path, lang), status=404)
+            client = request.client.host if request.client else "?"
+            if self.rate_limit.miss(client):
+                status = 429
+            else:
+                time.sleep(self.tarpit_seconds)
+        response = page_response(page, status=status)
+        if status == 429:
+            response.headers["Retry-After"] = str(int(self.rate_limit.window_seconds))
         return response
 
     def address_parts(
@@ -211,7 +260,7 @@ class ReelApp:
             """The sorted file names of the reel - the review page's read api."""
             reel, _review, file_parts = self.checked_reel(address)
             if reel is None or file_parts:
-                return self.not_found(request.url.path, tarpit=True)
+                return self.not_found(request, tarpit=True)
             return JSONResponse(site.reel_files(reel))
 
         @app.get(
@@ -222,7 +271,7 @@ class ReelApp:
             """Folder and acronym of the reel."""
             reel, _review, file_parts = self.checked_reel(address)
             if reel is None or file_parts:
-                return self.not_found(request.url.path, tarpit=True)
+                return self.not_found(request, tarpit=True)
             return JSONResponse({"folder": reel.folder, "acronym": reel.acronym})
 
         @app.get(
@@ -233,7 +282,7 @@ class ReelApp:
             """The hop set parsed by the model - the page never parses YAML."""
             reel, _review, file_parts = self.checked_reel(address)
             if reel is None or file_parts:
-                return self.not_found(request.url.path, tarpit=True)
+                return self.not_found(request, tarpit=True)
             return JSONResponse(reel.hop_set.to_dict() if reel.hop_set else {})
 
         @app.post(
@@ -250,7 +299,7 @@ class ReelApp:
                 or file_parts
                 or action not in ("save", "feedback", "upload")
             ):
-                return self.not_found(request.url.path, tarpit=True)
+                return self.not_found(request, tarpit=True)
             await request.body()
             return JSONResponse({})
 
@@ -279,7 +328,7 @@ class ReelApp:
                 return remember_lang(request, page_response(site.reels(lang=lang)))
             reel, file_parts = site.resolve_reel(parts)
             if reel is None or not site.allowed(reel, review):
-                return self.not_found(path, tarpit=True)
+                return self.not_found(request, tarpit=True)
             if not file_parts:
                 if not path.endswith("/"):
                     # the reel page needs its trailing slash so its relative
@@ -295,7 +344,7 @@ class ReelApp:
             if not file_path.startswith(reel_dir + os.sep) or not os.path.isfile(
                 file_path
             ):
-                return self.not_found(path)
+                return self.not_found(request)
             return FileResponse(file_path)
 
         @app.exception_handler(404)

@@ -20,7 +20,7 @@ from rdd.hopset import HopSet
 from rdd.rdd_site import RddSiteConfig, ReelSite, Review, Reviews
 from rdd.recording import Recording
 from rdd.reels import Reel
-from rdd.webapp import create_app
+from rdd.webapp import RateLimit, ReelApp, create_app
 
 
 class TestRddSite(Basetest):
@@ -373,3 +373,56 @@ class TestReelDelivery(Basetest):
         """Test that a path may not leave its reel folder."""
         status, _body, _headers = self.get("/reels/genwiki-walk/../persons.yaml")
         self.assertEqual(404, status)
+
+
+class TestRateLimit(Basetest):
+    """Test the rate limit on missed lookups per the Reel Review
+    decision - unknown tokens are rate-limited."""
+
+    def testMiss(self):
+        """Test the sliding window per client."""
+        limit = RateLimit(max_misses=2, window_seconds=60.0)
+        self.assertFalse(limit.miss("a", now=0.0))
+        self.assertFalse(limit.miss("a", now=1.0))
+        self.assertTrue(limit.miss("a", now=2.0))
+        # another client has its own window
+        self.assertFalse(limit.miss("b", now=2.0))
+        # the window has passed
+        self.assertFalse(limit.miss("a", now=100.0))
+
+    def testUnknownTokenRateLimited(self):
+        """Test that a client probing unknown tokens answers 429 over the
+        limit, Retry-After naming the window."""
+        config = RddSiteConfig(
+            recordings_path="examples/recordings",
+            main_demo="genwiki-walk",
+        )
+        site = ReelSite(config, reviews=Reviews())
+        reel_app = ReelApp(site)
+        reel_app.tarpit_seconds = 0.0
+        reel_app.rate_limit = RateLimit(max_misses=2, window_seconds=60.0)
+        uv_config = uvicorn.Config(
+            reel_app.app, host="127.0.0.1", port=0, log_level="warning"
+        )
+        server = uvicorn.Server(uv_config)
+        threading.Thread(target=server.run, daemon=True).start()
+        while not server.started:
+            time.sleep(0.01)
+        port = server.servers[0].sockets[0].getsockname()[1]
+        try:
+            statuses = []
+            retry_after = None
+            for _probe in range(3):
+                request = urllib.request.Request(
+                    f"http://127.0.0.1:{port}/reels/no-such-token/"
+                )
+                try:
+                    with urllib.request.urlopen(request) as response:
+                        statuses.append(response.status)
+                except urllib.error.HTTPError as http_error:
+                    statuses.append(http_error.code)
+                    retry_after = http_error.headers.get("Retry-After")
+            self.assertEqual([404, 404, 429], statuses)
+            self.assertEqual("60", retry_after)
+        finally:
+            server.should_exit = True
