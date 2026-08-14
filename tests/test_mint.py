@@ -7,8 +7,13 @@ minting ADR
 """
 
 import os
+import socket
 import stat
 import tempfile
+import threading
+import time
+import urllib.error
+import urllib.request
 
 from basemkit.basetest import Basetest
 
@@ -80,13 +85,37 @@ class TestMint(Basetest):
         self.assertIn(private_reel, visible)
         self.assertFalse(site.allowed(private_reel, None))
 
-    def testServeRefusesUninitialized(self):
-        """Test that a site without reviews.yaml refuses to serve and names the
-        init command."""
+    def testServeUninitializedShowsState(self):
+        """Test that a site without reviews.yaml serves the installation
+        state - up, refusing reels and naming the init command - instead
+        of hiding the state behind a dead backend."""
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
         config = RddSiteConfig(
-            recordings_path="examples/recordings", main_demo="genwiki-walk"
+            recordings_path="examples/recordings",
+            main_demo="genwiki-walk",
+            port=port,
         )
         missing = os.path.join(self.rdd_dir, "reviews.yaml")
-        with self.assertRaises(ValueError) as context:
-            serve(config, reviews_path=missing)
-        self.assertIn("reelsite --init", str(context.exception))
+        server = threading.Thread(
+            target=serve,
+            kwargs={"config": config, "reviews_path": missing},
+            daemon=True,
+        )
+        server.start()
+        page = ""
+        status = 0
+        for _ in range(50):
+            try:
+                urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=1)
+            except urllib.error.HTTPError as http_error:
+                status = http_error.code
+                page = http_error.read().decode()
+                break
+            except OSError:
+                time.sleep(0.1)
+        self.assertEqual(503, status)
+        self.assertIn("Installation mode", page)
+        self.assertIn("reelsite --init", page)
+        self.assertIn(missing, page)

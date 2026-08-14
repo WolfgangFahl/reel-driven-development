@@ -561,6 +561,39 @@ free software under Apache-2.0, so any organization can run a site like this one
         page = self.page("reels", content)
         return page
 
+    def installation(self, reviews_file: str) -> str:
+        """The installation mode page - the state a visitor sees while the
+        site is not initialized.
+
+        Per the Owner bootstrap decision a site without reviews.yaml
+        refuses to serve reels and names the init command instead; the
+        state is shown, never hidden behind a dead backend.
+
+        Args:
+            reviews_file: the reviews file whose absence is the state.
+
+        Returns:
+            the installation mode page.
+        """
+        content = f"""<h2>Installation mode</h2>
+<div class="card">
+This reel site is not initialized: <code>{html.escape(reviews_file)}</code>
+does not exist, so no review right exists yet - not even the owner's.
+No reel is served in this state.
+</div>
+<div class="card">
+The owner initializes the site on its host - access administration needs
+ssh and nothing else:
+<pre>reelsite --init</pre>
+The command asks for username, full name, email and url, seeds the owner
+and mints the wildcard owner token. The token is shown once on the
+terminal and written beside the site configuration with mode 600; it is
+never mailed, never logged and never minted via this webservice.
+</div>
+"""
+        page = self.page("installation mode", content)
+        return page
+
     def about(self) -> str:
         """The about page - version, license and repository."""
         version = self.version
@@ -804,6 +837,39 @@ class ReelSiteHandler(http.server.BaseHTTPRequestHandler):
         print(f"{self.address_string()} {format % args}", flush=True)
 
 
+class InstallationHandler(http.server.BaseHTTPRequestHandler):
+    """Serve the installation mode state.
+
+    Per the Owner bootstrap decision a site without reviews.yaml refuses
+    to serve reels and names the init command instead - the site is up
+    and shows what needs to be done; it never serves a reel and never
+    mints.
+    """
+
+    page: bytes = b""
+
+    def do_GET(self):
+        """Answer any request with the installation state."""
+        self.respond()
+
+    def do_POST(self):
+        """Answer any write attempt with the installation state."""
+        self.respond()
+
+    def respond(self):
+        """Send the installation page as service unavailable."""
+        self.send_response(503)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Content-Length", str(len(self.page)))
+        self.end_headers()
+        self.wfile.write(self.page)
+
+    def log_message(self, format: str, *args):
+        """Log to stdout so the service log carries the requests."""
+        print(f"{self.address_string()} {format % args}", flush=True)
+
+
 def serve(
     config: RddSiteConfig,
     host: str = "127.0.0.1",
@@ -811,23 +877,36 @@ def serve(
 ) -> None:
     """Serve the site of the given configuration.
 
+    Per the Owner bootstrap decision a site without reviews.yaml is in
+    installation mode: it stays up, refuses to serve reels and names the
+    init command on every request, so the state is never hidden behind a
+    dead backend.
+
     Args:
         config: the site configuration.
         host: the interface to listen on; localhost by default - the web
             server in front is what the internet talks to.
         reviews_path: the reviews file; the default path when None.
-
-    Raises:
-        ValueError: where no reviews file exists - per the Owner
-            bootstrap decision a site without reviews.yaml is in
-            installation mode and refuses to serve.
     """
     reviews_file = os.path.expanduser(reviews_path or Reviews.DEFAULT_PATH)
     if not os.path.isfile(reviews_file):
-        raise ValueError(
-            f"no {reviews_file} - the site is not initialized; "
-            "run reelsite --init first"
+        install_site = ReelSite(config, reels=Reels(), reviews=Reviews())
+        page = install_site.installation(reviews_file).encode()
+        handler = type(
+            "BoundInstallationHandler", (InstallationHandler,), {"page": page}
         )
+        print(
+            f"rdd_site: installation mode - no {reviews_file}; " "run reelsite --init",
+            flush=True,
+        )
+        with http.server.ThreadingHTTPServer((host, config.port), handler) as httpd:
+            print(
+                f"rdd_site: {config.title} on http://{host}:{config.port}/ "
+                "(installation mode)",
+                flush=True,
+            )
+            httpd.serve_forever()
+        return
     site = ReelSite(config, reviews=Reviews.of_path(reviews_file))
     main_demo = site.check_main_demo()
     print(f"rdd_site: {site.reels_found.as_summary()}", flush=True)

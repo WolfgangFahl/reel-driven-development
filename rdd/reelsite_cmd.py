@@ -6,6 +6,7 @@ command line interface of the reel site
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import List, Optional
@@ -13,7 +14,7 @@ from typing import List, Optional
 from basemkit.base_cmd import BaseCmd
 
 from rdd.mint import Mint
-from rdd.rdd_site import RddSiteConfig, serve
+from rdd.rdd_site import RddSiteConfig, Reviews, serve
 from rdd.version import Version
 
 
@@ -90,6 +91,12 @@ class ReelSiteCmd(BaseCmd):
             config_path = Path(args.config).expanduser()
             if not config_path.exists():
                 raise ValueError(f"no site configuration at {config_path}")
+            reviews_file = os.path.expanduser(Reviews.DEFAULT_PATH)
+            if not os.path.isfile(reviews_file) and sys.stdin.isatty():
+                # per the Owner bootstrap decision the first interactive
+                # start is installation mode - the owner is asked here;
+                # a non-interactive start serves the installation state
+                self.init_site(config)
             serve(config, host=args.host)
             handled = True
         return handled
