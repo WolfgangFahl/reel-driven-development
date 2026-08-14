@@ -38,8 +38,14 @@ Both put the `rdd` command and the tool entry points on the PATH.
 
 ## Reel Driven Development
 
+<img src="https://raw.githubusercontent.com/WolfgangFahl/reel-driven-development/main/rdd/resources/Recording.svg" width="48" align="left" alt="Recording icon">
+
 A reel is a recorded user walk - e.g. a screen-share demo where a domain expert
-walks through a system while talking. RDD treats the reel as a graph walk:
+walks through a system while talking.
+
+<img src="https://raw.githubusercontent.com/WolfgangFahl/reel-driven-development/main/rdd/resources/HopContent.svg" width="48" align="left" alt="HopContent icon">
+
+RDD treats the reel as a graph walk:
 
 * every context switch (page, browser tab, application) and every relevant
   interaction (submenu, filter, zoom, sort) is a hop
@@ -75,7 +81,7 @@ entry points of their own.
 | `--detector` | the detector to find the hops with, by name | `Content` | comparing detectors, or one detector misses hops on this material |
 | `--start` | segment start (seconds or MM:SS) | 0 | processing a part of the reel |
 | `--end` | segment end (seconds or MM:SS) | video duration | processing a part of the reel |
-| `--out` | output directory for the evidence frames, `hops.yaml` and `config.yaml` | `hops` | keeping several hop sets apart |
+| `--out` | output directory for the evidence frames and `reel.yaml` | `hops` | keeping several hop sets apart |
 | `--progress` | show the progress bar of the running detection | off | a run over a long reel must not be silent ([issue #6](https://github.com/WolfgangFahl/reel-driven-development/issues/6)) |
 
 `rdd detect --help` lists these together with the standard options of
@@ -109,13 +115,13 @@ A run writes to `--out`:
   full frame as recorded, named by its time offset so curation never
   renames a surviving frame
   ([issue #21](https://github.com/WolfgangFahl/reel-driven-development/issues/21))
-* `hops.yaml` - the hop records, whose field names are the property names of
+* `reel.yaml` - the reel record: the recording, the config values that decided
+  this hop set - so a run can be repeated from its own output
+  ([issue #4](https://github.com/WolfgangFahl/reel-driven-development/issues/4)) -
+  and the hop records, whose field names are the property names of
   [Concept:HopContent](https://contexts.bitplan.com/index.php/Concept:HopContent);
   `node`, `url` and `summary` stay empty because they come from the transcript
   and are never guessed from the picture
-* `config.yaml` - the values that decided this hop set, so a run can be
-  repeated from its own output
-  ([issue #4](https://github.com/WolfgangFahl/reel-driven-development/issues/4))
 
 ## Example: GenWiki walk
 

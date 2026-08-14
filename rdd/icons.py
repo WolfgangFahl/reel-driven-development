@@ -12,6 +12,9 @@ shapes.
 @author: wf
 """
 
+import re
+import urllib.parse
+from pathlib import Path
 from typing import Dict
 
 # material icon name -> path data of the 24x24 svg
@@ -65,3 +68,62 @@ def svg(name: str, size: str = "1.2em") -> str:
         f'fill="currentColor" aria-hidden="true"><path d="{path}"/></svg>'
     )
     return markup
+
+
+def topic_svg_source(name: str) -> str:
+    """The SVG source of the named topic icon.
+
+    The topic icons are the house-authored ones of
+    https://contexts.bitplan.com/index.php/Icons/SVG - shipped as
+    resources of the package per issue #47.
+
+    Args:
+        name: topic icon name e.g. Recording or HopContent.
+
+    Returns:
+        the SVG source.
+
+    Raises:
+        FileNotFoundError: if the icon is not one of the shipped ones.
+    """
+    path = Path(__file__).parent / "resources" / f"{name}.svg"
+    source = path.read_text()
+    return source
+
+
+def topic_svg(name: str, size: str = "3em") -> str:
+    """Render the named topic icon as an inline svg of the given size.
+
+    Args:
+        name: topic icon name e.g. Recording or HopContent.
+        size: css length for width and height.
+
+    Returns:
+        the svg markup at the given size.
+    """
+    source = topic_svg_source(name)
+    markup = re.sub(
+        r'width="64" height="64"',
+        f'width="{size}" height="{size}"',
+        source,
+        count=1,
+    ).strip()
+    return markup
+
+
+def favicon_link(name: str = "Recording") -> str:
+    """The favicon link of the named topic icon as a data uri.
+
+    A reel site page loads nothing but the reel site per the Review UI
+    stack decision, so the favicon travels inline.
+
+    Args:
+        name: topic icon name e.g. Recording.
+
+    Returns:
+        the link markup for the html head.
+    """
+    source = topic_svg_source(name)
+    data = urllib.parse.quote(source)
+    link = f'<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,{data}">'
+    return link

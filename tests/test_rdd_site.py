@@ -311,9 +311,13 @@ class TestReelDelivery(Basetest):
         self.assertIn(b"reelreview", body)
         status, _body, _headers = self.get("/reels/genwiki-walk/hop-99h99m99s")
         self.assertEqual(404, status)
-        status, body, _headers = self.get(f"/reels/{self.TOKEN}/genwiki-walk/hop-00h00m02s")
+        status, body, _headers = self.get(
+            f"/reels/{self.TOKEN}/genwiki-walk/hop-00h00m02s"
+        )
         self.assertEqual(200, status)
-        status, _body, _headers = self.get(f"/reels/{self.TOKEN}/secret-reel/hop-00h00m02s")
+        status, _body, _headers = self.get(
+            f"/reels/{self.TOKEN}/secret-reel/hop-00h00m02s"
+        )
         self.assertEqual(404, status)
         status, body, _headers = self.get("/reels/2026/05/genwiki-walk/reel.yaml")
         self.assertEqual(200, status)

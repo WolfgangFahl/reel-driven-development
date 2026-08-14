@@ -22,7 +22,7 @@ from typing import Dict, List, Optional
 from basemkit.yamlable import lod_storable
 
 from rdd.i18n import FLAGS, LANGUAGES, review_texts, texts
-from rdd.icons import svg
+from rdd.icons import favicon_link, svg, topic_svg
 from rdd.palette import Palette, Palettes
 from rdd.reelreview import page_path
 from rdd.reels import Reel, Reels
@@ -385,7 +385,7 @@ class ReelSite:
         )
         t = texts(lang)
         content = (
-            f"<h2>{html.escape(reel.title)}</h2>\n"
+            f'<h2>{topic_svg("Recording", "1.2em")} {html.escape(reel.title)}</h2>\n'
             f'<p><a href="review">{t["review"]}</a></p>\n'
             f'<div class="card">\n<b>{t["summary"]}</b><br>\n'
             f"{html.escape(summary)}\n</div>\n"
@@ -497,6 +497,8 @@ header a.flag {{ box-shadow: none; text-transform: none; background: none; font-
 .hamburger[hidden] {{ display: none; }}
 body.collapsed header, body.collapsed footer {{ display: none; }}
 main {{ padding: 1em; max-width: 55em; }}
+header h1 svg, main h2 svg {{ vertical-align: -0.2em; }}
+.topic-icon {{ float: left; margin: 0 .8em .3em 0; }}
 main h2 {{ font-size: 1.2em; }}
 main a {{ color: var(--primary); }}
 .card {{ background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: .8em; margin-bottom: .8em; }}
@@ -543,6 +545,7 @@ td, th {{ text-align: left; padding: .2em .8em .2em 0; }}
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{site_title} - {html.escape(title)}</title>
+{favicon_link()}
 <style>
 {self.style()}</style>
 </head>
@@ -550,7 +553,7 @@ td, th {{ text-align: left; padding: .2em .8em .2em 0; }}
 <button class="hamburger collapsed" id="unhide" onclick="toggleMenu()" title="show menu" hidden>{menu_icon}</button>
 <header>
   <button class="hamburger" onclick="toggleMenu()" title="hide menu">{menu_icon}</button>
-  <h1>{site_title}</h1>
+  <h1>{topic_svg("Recording", "1.2em")} {site_title}</h1>
 {links}
   {self.flag_selector(lang)}
 </header>
@@ -587,6 +590,7 @@ function toggleMenu() {{
             url = self.reel_url(main_demo)
             card = (
                 f'<h2>{t["demo"]}</h2>\n<div class="card">\n'
+                f'<span class="topic-icon">{topic_svg("HopContent")}</span>\n'
                 f'{t["demo_text"]}: <a href="{html.escape(url)}">'
                 f"{html.escape(main_demo.title)}</a> "
                 f'({main_demo.hop_count} {t["hops"]}) - {t["demo_hint"]}\n</div>'
@@ -602,6 +606,7 @@ function toggleMenu() {{
         t = texts(lang)
         intro = html.escape(self.config.intro) if self.config.intro else t["intro"]
         content = f"""<div class="card">
+<span class="topic-icon">{topic_svg("Recording")}</span>
 {intro}
 </div>
 <h2>{t["reviewing"]}</h2>
@@ -652,7 +657,8 @@ function toggleMenu() {{
                 for reel in visible_reels
             )
             content = (
-                f'<h2>{html.escape(heading)}</h2>\n<div class="card">\n<table>\n'
+                f'<h2>{topic_svg("Recording", "1.2em")} '
+                f'{html.escape(heading)}</h2>\n<div class="card">\n<table>\n'
                 f'<tr><th>{t["reel"]}</th><th>{t["title"]}</th>'
                 f'<th>{t["hops"]}</th><th>{t["status"]}</th></tr>\n'
                 f"{rows}\n</table>\n</div>"

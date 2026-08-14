@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Recording topic icon: record dot + spoken-word waveform, BITPlan Meeting context -->
+  <rect x="2" y="2" width="60" height="60" rx="12" fill="#2b6cb0"/>
+  <rect x="5" y="5" width="54" height="54" rx="9" fill="#ebf8ff"/>
+  <!-- record ring + dot -->
+  <circle cx="32" cy="26" r="13" fill="none" stroke="#c53030" stroke-width="3"/>
+  <circle cx="32" cy="26" r="6.5" fill="#e53e3e"/>
+  <!-- waveform of the transcript -->
+  <g stroke="#2b6cb0" stroke-width="3" stroke-linecap="round">
+    <line x1="14" y1="47" x2="14" y2="53"/>
+    <line x1="21" y1="44" x2="21" y2="56"/>
+    <line x1="28" y1="41" x2="28" y2="59"/>
+    <line x1="35" y1="45" x2="35" y2="55"/>
+    <line x1="42" y1="42" x2="42" y2="58"/>
+    <line x1="49" y1="46" x2="49" y2="54"/>
+  </g>
+</svg>
