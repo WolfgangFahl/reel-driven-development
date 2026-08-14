@@ -1,0 +1,170 @@
+# i18n texts of a reel site - de and en for a start
+# texts: the site pages; review: the packaged review page
+# per the i18n issue the browser setting is the default,
+# ?lang= decides and the cookie remembers
+languages:
+- en
+- de
+flags:
+  en: 🇬🇧
+  de: 🇩🇪
+texts:
+  en:
+    home: home
+    reels: reels
+    github: github
+    help: help
+    about: about
+    intro: This site keeps the reels of recorded sessions - a video, the document
+      derived from it and the evidence frames.
+    reviewing: Reviewing
+    reviewing_text: A review is addressed by its own url. If you were invited
+      to review, follow the link you received by mail - it opens the reels of
+      your review. There is no account and no password, and the link keeps working
+      when reels are added.
+    browsing: Browsing
+    browsing_text: The reels this site makes public are listed under <a href="/reels">reels</a>.
+    demo: Demo
+    demo_text: See a reel for yourself
+    demo_hint: inspect it in true inspection mode; your verdicts stay on your
+      device.
+    rdd_text: The reels are produced with
+    rdd_text2: free software under Apache-2.0, so any organization can run a site
+      like this one.
+    review: review
+    summary: summary
+    file: file
+    bytes: bytes
+    review_by: Reels - review by {person}
+    no_reels: This site makes no reel public yet.
+    reel: reel
+    title: title
+    hops: hops
+    status: status
+    about_heading: About
+    site: site
+    software: software
+    version: version
+    updated: updated
+    license: license
+    source: source
+    documentation: documentation
+    not_found: not found
+    no_page: There is no page at
+    example: Example of a valid address
+    reels_listed: the reels of this site are listed under <a href="/reels">reels</a>.
+  de:
+    home: start
+    reels: reels
+    github: github
+    help: hilfe
+    about: über
+    intro: Diese Website bewahrt die Reels aufgezeichneter Sitzungen - ein Video,
+      das daraus abgeleitete Dokument und die Beweis-Frames.
+    reviewing: Begutachten
+    reviewing_text: Eine Begutachtung hat ihre eigene Adresse. Wer zur Begutachtung
+      eingeladen ist, folgt dem per Mail erhaltenen Link - er öffnet die Reels
+      der Begutachtung. Es gibt kein Konto und kein Passwort, und der Link gilt
+      weiter, wenn Reels hinzukommen.
+    browsing: Stöbern
+    browsing_text: Die öffentlichen Reels dieser Website stehen unter <a href="/reels">reels</a>.
+    demo: Demo
+    demo_text: Ein Reel selbst ansehen
+    demo_hint: im echten Inspektionsmodus - die Urteile bleiben auf dem eigenen
+      Gerät.
+    rdd_text: Die Reels entstehen mit
+    rdd_text2: freie Software unter Apache-2.0 - jede Organisation kann eine solche
+      Website betreiben.
+    review: Begutachtung
+    summary: Zusammenfassung
+    file: Datei
+    bytes: Bytes
+    review_by: Reels - Begutachtung durch {person}
+    no_reels: Diese Website macht noch kein Reel öffentlich.
+    reel: Reel
+    title: Titel
+    hops: Hops
+    status: Status
+    about_heading: Über
+    site: Website
+    software: Software
+    version: Version
+    updated: Stand
+    license: Lizenz
+    source: Quelle
+    documentation: Dokumentation
+    not_found: nicht gefunden
+    no_page: Es gibt keine Seite unter
+    example: Beispiel einer gültigen Adresse
+    reels_listed: die Reels dieser Website stehen unter <a href="/reels">reels</a>.
+review:
+  en:
+    confirm: confirm
+    reject: reject
+    hide: hide
+    modify: modify
+    open: open
+    hop: hop
+    save: save
+    download: download
+    upload: upload
+    mail: mail
+    folder: folder
+    reel_verdict: reel verdict
+    reason_text: reason / text
+    signature: pseudo signature
+    review_hops: review the hops
+    zip: download reel folder (zip)
+    reason_opt: reason (optional)
+    mod_text: modification text (required)
+    node: node
+    url: url
+    summary: summary
+    audio: audio
+    saved: saved reel-feedback.yaml
+    save_failed: 'save failed:'
+    uploaded: uploaded to
+    upload_failed: 'upload failed:'
+    need_text: 'modify needs a text: hop pos'
+    need_signature: pseudo signature required
+    folder_title: the review folder of this reel
+    zip_title: the reel folder as one zip
+    pid_title: the persistent url of this hop
+    no_feedback_url: no feedback_url in reel.yaml config
+    mail_body: reel-feedback.yaml saved in the recording folder - attach it from
+      there.
+  de:
+    confirm: bestätigen
+    reject: ablehnen
+    hide: verbergen
+    modify: ändern
+    open: offen
+    hop: Hop
+    save: speichern
+    download: herunterladen
+    upload: hochladen
+    mail: Mail
+    folder: Ordner
+    reel_verdict: Reel-Urteil
+    reason_text: Begründung / Text
+    signature: Pseudo-Signatur
+    review_hops: die Hops begutachten
+    zip: Reel-Ordner herunterladen (zip)
+    reason_opt: Begründung (optional)
+    mod_text: Änderungstext (erforderlich)
+    node: Knoten
+    url: URL
+    summary: Zusammenfassung
+    audio: Audio
+    saved: reel-feedback.yaml gespeichert
+    save_failed: 'Speichern fehlgeschlagen:'
+    uploaded: hochgeladen nach
+    upload_failed: 'Hochladen fehlgeschlagen:'
+    need_text: 'ändern braucht einen Text: Hop pos'
+    need_signature: Pseudo-Signatur erforderlich
+    folder_title: der Begutachtungsordner dieses Reels
+    zip_title: der Reel-Ordner als ein Zip
+    pid_title: die persistente URL dieses Hops
+    no_feedback_url: kein feedback_url in der reel.yaml Konfiguration
+    mail_body: reel-feedback.yaml liegt gespeichert im Aufnahmeordner - von dort
+      anhängen.

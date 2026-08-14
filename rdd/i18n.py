@@ -1,214 +1,74 @@
 """Created on 2026-08-14.
 
 i18n of the reel site - de and en for a start, the default being the
-browser setting and a selector with flag per the i18n issue
+browser setting and a selector with flag per the i18n issue. The texts
+are a resource of the package: rdd/resources/i18n.yaml.
 
 @author: wf
 """
 
-from typing import Dict, Optional
+from dataclasses import field
+from pathlib import Path
+from typing import ClassVar, Dict, List, Optional
 
-LANGUAGES = ("en", "de")
-
-FLAGS = {"en": "\U0001f1ec\U0001f1e7", "de": "\U0001f1e9\U0001f1ea"}
-
-TEXTS: Dict[str, Dict[str, str]] = {
-    "en": {
-        "home": "home",
-        "reels": "reels",
-        "github": "github",
-        "help": "help",
-        "about": "about",
-        "intro": (
-            "This site keeps the reels of recorded sessions - "
-            "a video, the document derived from it and the evidence frames."
-        ),
-        "reviewing": "Reviewing",
-        "reviewing_text": (
-            "A review is addressed by its own url. If you were invited to "
-            "review, follow the link you received by mail - it opens the "
-            "reels of your review. There is no account and no password, and "
-            "the link keeps working when reels are added."
-        ),
-        "browsing": "Browsing",
-        "browsing_text": (
-            "The reels this site makes public are listed under "
-            '<a href="/reels">reels</a>.'
-        ),
-        "demo": "Demo",
-        "demo_text": "See a reel for yourself",
-        "demo_hint": (
-            "inspect it in true inspection mode; your verdicts stay on " "your device."
-        ),
-        "rdd_text": "The reels are produced with",
-        "rdd_text2": (
-            "free software under Apache-2.0, so any organization can run "
-            "a site like this one."
-        ),
-        "review": "review",
-        "summary": "summary",
-        "file": "file",
-        "bytes": "bytes",
-        "review_by": "Reels - review by {person}",
-        "no_reels": "This site makes no reel public yet.",
-        "reel": "reel",
-        "title": "title",
-        "hops": "hops",
-        "status": "status",
-        "about_heading": "About",
-        "site": "site",
-        "software": "software",
-        "version": "version",
-        "updated": "updated",
-        "license": "license",
-        "source": "source",
-        "documentation": "documentation",
-        "not_found": "not found",
-        "no_page": "There is no page at",
-        "example": "Example of a valid address",
-        "reels_listed": (
-            'the reels of this site are listed under <a href="/reels">reels</a>.'
-        ),
-    },
-    "de": {
-        "home": "start",
-        "reels": "reels",
-        "github": "github",
-        "help": "hilfe",
-        "about": "über",
-        "intro": (
-            "Diese Website bewahrt die Reels aufgezeichneter Sitzungen - "
-            "ein Video, das daraus abgeleitete Dokument und die "
-            "Beweis-Frames."
-        ),
-        "reviewing": "Begutachten",
-        "reviewing_text": (
-            "Eine Begutachtung hat ihre eigene Adresse. Wer zur Begutachtung "
-            "eingeladen ist, folgt dem per Mail erhaltenen Link - er öffnet "
-            "die Reels der Begutachtung. Es gibt kein Konto und kein "
-            "Passwort, und der Link gilt weiter, wenn Reels hinzukommen."
-        ),
-        "browsing": "Stöbern",
-        "browsing_text": (
-            "Die öffentlichen Reels dieser Website stehen unter "
-            '<a href="/reels">reels</a>.'
-        ),
-        "demo": "Demo",
-        "demo_text": "Ein Reel selbst ansehen",
-        "demo_hint": (
-            "im echten Inspektionsmodus - die Urteile bleiben auf dem " "eigenen Gerät."
-        ),
-        "rdd_text": "Die Reels entstehen mit",
-        "rdd_text2": (
-            "freie Software unter Apache-2.0 - jede Organisation kann eine "
-            "solche Website betreiben."
-        ),
-        "review": "Begutachtung",
-        "summary": "Zusammenfassung",
-        "file": "Datei",
-        "bytes": "Bytes",
-        "review_by": "Reels - Begutachtung durch {person}",
-        "no_reels": "Diese Website macht noch kein Reel öffentlich.",
-        "reel": "Reel",
-        "title": "Titel",
-        "hops": "Hops",
-        "status": "Status",
-        "about_heading": "Über",
-        "site": "Website",
-        "software": "Software",
-        "version": "Version",
-        "updated": "Stand",
-        "license": "Lizenz",
-        "source": "Quelle",
-        "documentation": "Dokumentation",
-        "not_found": "nicht gefunden",
-        "no_page": "Es gibt keine Seite unter",
-        "example": "Beispiel einer gültigen Adresse",
-        "reels_listed": (
-            'die Reels dieser Website stehen unter <a href="/reels">reels</a>.'
-        ),
-    },
-}
+from basemkit.yamlable import lod_storable
 
 
-REVIEW_TEXTS: Dict[str, Dict[str, str]] = {
-    "en": {
-        "confirm": "confirm",
-        "reject": "reject",
-        "hide": "hide",
-        "modify": "modify",
-        "open": "open",
-        "hop": "hop",
-        "save": "save",
-        "download": "download",
-        "upload": "upload",
-        "mail": "mail",
-        "folder": "folder",
-        "reel_verdict": "reel verdict",
-        "reason_text": "reason / text",
-        "signature": "pseudo signature",
-        "review_hops": "review the hops",
-        "zip": "download reel folder (zip)",
-        "reason_opt": "reason (optional)",
-        "mod_text": "modification text (required)",
-        "node": "node",
-        "url": "url",
-        "summary": "summary",
-        "audio": "audio",
-        "saved": "saved reel-feedback.yaml",
-        "save_failed": "save failed:",
-        "uploaded": "uploaded to",
-        "upload_failed": "upload failed:",
-        "need_text": "modify needs a text: hop pos",
-        "need_signature": "pseudo signature required",
-        "folder_title": "the review folder of this reel",
-        "zip_title": "the reel folder as one zip",
-        "pid_title": "the persistent url of this hop",
-        "no_feedback_url": "no feedback_url in reel.yaml config",
-        "mail_body": (
-            "reel-feedback.yaml saved in the recording folder - "
-            "attach it from there."
-        ),
-    },
-    "de": {
-        "confirm": "bestätigen",
-        "reject": "ablehnen",
-        "hide": "verbergen",
-        "modify": "ändern",
-        "open": "offen",
-        "hop": "Hop",
-        "save": "speichern",
-        "download": "herunterladen",
-        "upload": "hochladen",
-        "mail": "Mail",
-        "folder": "Ordner",
-        "reel_verdict": "Reel-Urteil",
-        "reason_text": "Begründung / Text",
-        "signature": "Pseudo-Signatur",
-        "review_hops": "die Hops begutachten",
-        "zip": "Reel-Ordner herunterladen (zip)",
-        "reason_opt": "Begründung (optional)",
-        "mod_text": "Änderungstext (erforderlich)",
-        "node": "Knoten",
-        "url": "URL",
-        "summary": "Zusammenfassung",
-        "audio": "Audio",
-        "saved": "reel-feedback.yaml gespeichert",
-        "save_failed": "Speichern fehlgeschlagen:",
-        "uploaded": "hochgeladen nach",
-        "upload_failed": "Hochladen fehlgeschlagen:",
-        "need_text": "ändern braucht einen Text: Hop pos",
-        "need_signature": "Pseudo-Signatur erforderlich",
-        "folder_title": "der Begutachtungsordner dieses Reels",
-        "zip_title": "der Reel-Ordner als ein Zip",
-        "pid_title": "die persistente URL dieses Hops",
-        "no_feedback_url": "kein feedback_url in der reel.yaml Konfiguration",
-        "mail_body": (
-            "reel-feedback.yaml liegt gespeichert im Aufnahmeordner - "
-            "von dort anhängen."
-        ),
-    },
-}
+@lod_storable
+class I18n:
+    """The i18n texts of a reel site.
+
+    Loaded from the i18n.yaml resource the package ships - the texts
+    of the site pages and of the packaged review page, the languages
+    and their flags.
+    """
+
+    languages: List[str] = field(default_factory=list)
+    flags: Dict[str, str] = field(default_factory=dict)
+    texts: Dict[str, Dict[str, str]] = field(default_factory=dict)
+    review: Dict[str, Dict[str, str]] = field(default_factory=dict)
+
+    _instance: ClassVar[Optional["I18n"]] = None
+
+    @classmethod
+    def resource_path(cls) -> Path:
+        """Path of the i18n texts shipped with the package."""
+        path = Path(__file__).parent / "resources" / "i18n.yaml"
+        return path
+
+    @classmethod
+    def of_resource(cls) -> "I18n":
+        """Load the i18n texts shipped with the package."""
+        i18n = cls.load_from_yaml_file(str(cls.resource_path()))
+        return i18n
+
+    @classmethod
+    def get_instance(cls) -> "I18n":
+        """Get the shared instance, loaded once from the resource."""
+        if cls._instance is None:
+            cls._instance = cls.of_resource()
+        return cls._instance
+
+
+_I18N = I18n.get_instance()
+
+LANGUAGES = tuple(_I18N.languages)
+
+FLAGS = _I18N.flags
+
+
+def texts(lang: str) -> Dict[str, str]:
+    """The site page texts of the given language.
+
+    Args:
+        lang: the language code.
+
+    Returns:
+        the texts; english where the language is not carried.
+    """
+    i18n = I18n.get_instance()
+    lang_texts = i18n.texts.get(lang, i18n.texts["en"])
+    return lang_texts
 
 
 def review_texts(lang: str) -> Dict[str, str]:
@@ -220,20 +80,8 @@ def review_texts(lang: str) -> Dict[str, str]:
     Returns:
         the texts; english where the language is not carried.
     """
-    lang_texts = REVIEW_TEXTS.get(lang, REVIEW_TEXTS["en"])
-    return lang_texts
-
-
-def texts(lang: str) -> Dict[str, str]:
-    """The texts of the given language.
-
-    Args:
-        lang: the language code.
-
-    Returns:
-        the texts; english where the language is not carried.
-    """
-    lang_texts = TEXTS.get(lang, TEXTS["en"])
+    i18n = I18n.get_instance()
+    lang_texts = i18n.review.get(lang, i18n.review["en"])
     return lang_texts
 
 
