@@ -445,19 +445,21 @@ class ReelSite:
   :root {{ --bg: var(--dark); --fg: #ddd; --card: #2a2a2a; --border: #555; }}
 }}
 body {{ margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--fg); }}
-header {{ display: flex; gap: .6em; align-items: center; padding: .5em .8em; background: var(--primary); color: #fff; flex-wrap: wrap; }}
+header {{ display: flex; gap: .8em; align-items: center; padding: .6em .8em; background: var(--primary); color: #fff; flex-wrap: wrap; }}
 header h1 {{ font-size: 1.1em; margin: 0 .4em 0 0; }}
-header a {{ display: inline-flex; align-items: center; gap: .35em; color: #fff; text-decoration: none; border: 1px solid rgba(255,255,255,.5); border-radius: 4px; padding: .2em .7em; font-size: .9em; }}
+header a {{ display: inline-flex; align-items: center; gap: .5em; color: #fff; text-decoration: none; background: var(--primary); border-radius: 4px; padding: .5em 1em; font-size: .85em; font-weight: 500; text-transform: uppercase; letter-spacing: .05em; box-shadow: 0 1px 5px rgba(0,0,0,.2), 0 2px 2px rgba(0,0,0,.14), 0 3px 1px -2px rgba(0,0,0,.12); }}
 header a:hover {{ background: var(--accent); }}
-header a.flag {{ border: none; font-size: 1.1em; padding: .2em; margin-left: auto; }}
-.hamburger {{ display: inline-flex; align-items: center; background: none; border: none; color: #fff; cursor: pointer; padding: .1em; }}
-.hamburger.collapsed {{ position: fixed; top: .4em; left: .4em; z-index: 10; background: var(--primary); border-radius: 4px; padding: .25em; }}
+header a.flag {{ box-shadow: none; text-transform: none; background: none; font-size: 1.1em; padding: .2em; margin-left: auto; }}
+.hamburger {{ display: inline-flex; align-items: center; background: var(--primary); border: none; color: #fff; cursor: pointer; border-radius: 4px; padding: .45em .6em; box-shadow: 0 1px 5px rgba(0,0,0,.2), 0 2px 2px rgba(0,0,0,.14), 0 3px 1px -2px rgba(0,0,0,.12); }}
+.hamburger.collapsed {{ position: fixed; top: .4em; left: .4em; z-index: 10; }}
+.hamburger[hidden] {{ display: none; }}
 body.collapsed header, body.collapsed footer {{ display: none; }}
 main {{ padding: 1em; max-width: 55em; }}
 main h2 {{ font-size: 1.2em; }}
 main a {{ color: var(--primary); }}
 .card {{ background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: .8em; margin-bottom: .8em; }}
-footer {{ padding: .5em .8em; border-top: 1px solid var(--border); font-size: .85em; color: var(--info); }}
+footer {{ padding: .6em .8em; background: var(--primary); color: #fff; font-size: .85em; }}
+footer a {{ color: #fff; }}
 table {{ border-collapse: collapse; }}
 td, th {{ text-align: left; padding: .2em .8em .2em 0; }}
 """
