@@ -18,6 +18,7 @@ from typing import Dict, List, Optional
 
 from basemkit.yamlable import lod_storable
 
+from rdd.i18n import FLAGS, LANGUAGES, texts
 from rdd.icons import svg
 from rdd.palette import Palette, Palettes
 from rdd.reelreview import page_path
@@ -358,7 +359,7 @@ class ReelSite:
         ]
         return names
 
-    def reel_page(self, reel: Reel) -> str:
+    def reel_page(self, reel: Reel, lang: str = "en") -> str:
         """The page of one reel - what it is and the files it carries.
 
         The review and file links are relative so a review link keeps
@@ -366,6 +367,7 @@ class ReelSite:
 
         Args:
             reel: the reel.
+            lang: the language of the page.
 
         Returns:
             the reel page.
@@ -378,14 +380,17 @@ class ReelSite:
             f"<td>{os.path.getsize(os.path.join(reel.path, name))}</td></tr>"
             for name in self.reel_files(reel)
         )
+        t = texts(lang)
         content = (
             f"<h2>{html.escape(reel.title)}</h2>\n"
-            '<p><a href="review">review</a></p>\n'
-            f'<div class="card">\n<b>summary</b><br>\n{html.escape(summary)}\n</div>\n'
+            f'<p><a href="review">{t["review"]}</a></p>\n'
+            f'<div class="card">\n<b>{t["summary"]}</b><br>\n'
+            f"{html.escape(summary)}\n</div>\n"
             f'<div class="card">\n<table>\n'
-            f"<tr><th>file</th><th>bytes</th></tr>\n{rows}\n</table>\n</div>"
+            f'<tr><th>{t["file"]}</th><th>{t["bytes"]}</th></tr>\n'
+            f"{rows}\n</table>\n</div>"
         )
-        page = self.page(reel.acronym, content)
+        page = self.page(reel.acronym, content, lang)
         return page
 
     def review_page(self) -> str:
@@ -413,14 +418,20 @@ class ReelSite:
         )
         return page
 
-    def menu(self) -> List[MenuEntry]:
-        """The menu entries - settings and chat are dropped, a visitor has neither."""
+    def menu(self, lang: str = "en") -> List[MenuEntry]:
+        """The menu entries - settings and chat are dropped, a visitor has
+        neither.
+
+        Args:
+            lang: the language of the entry names.
+        """
+        t = texts(lang)
         entries = [
-            MenuEntry("home", "/", "home"),
-            MenuEntry("reels", "/reels", "movie"),
-            MenuEntry("github", self.config.cm_url, "bug_report", new_tab=True),
-            MenuEntry("help", self.config.doc_url, "help", new_tab=True),
-            MenuEntry("about", "/about", "info"),
+            MenuEntry(t["home"], "/", "home"),
+            MenuEntry(t["reels"], "/reels", "movie"),
+            MenuEntry(t["github"], self.config.cm_url, "bug_report", new_tab=True),
+            MenuEntry(t["help"], self.config.doc_url, "help", new_tab=True),
+            MenuEntry(t["about"], "/about", "info"),
         ]
         return entries
 
@@ -438,6 +449,7 @@ header {{ display: flex; gap: .6em; align-items: center; padding: .5em .8em; bac
 header h1 {{ font-size: 1.1em; margin: 0 .4em 0 0; }}
 header a {{ display: inline-flex; align-items: center; gap: .35em; color: #fff; text-decoration: none; border: 1px solid rgba(255,255,255,.5); border-radius: 4px; padding: .2em .7em; font-size: .9em; }}
 header a:hover {{ background: var(--accent); }}
+header a.flag {{ border: none; font-size: 1.1em; padding: .2em; margin-left: auto; }}
 .hamburger {{ display: inline-flex; align-items: center; background: none; border: none; color: #fff; cursor: pointer; padding: .1em; }}
 .hamburger.collapsed {{ position: fixed; top: .4em; left: .4em; z-index: 10; background: var(--primary); border-radius: 4px; padding: .25em; }}
 body.collapsed header, body.collapsed footer {{ display: none; }}
@@ -451,21 +463,38 @@ td, th {{ text-align: left; padding: .2em .8em .2em 0; }}
 """
         return css
 
-    def page(self, title: str, content: str) -> str:
+    def flag_selector(self, lang: str) -> str:
+        """The language selector with flag - the other languages as links.
+
+        Args:
+            lang: the language of the current page.
+
+        Returns:
+            the selector markup.
+        """
+        flags = " ".join(
+            f'<a class="flag" href="?lang={other}" title="{other}">{FLAGS[other]}</a>'
+            for other in LANGUAGES
+            if other != lang
+        )
+        return flags
+
+    def page(self, title: str, content: str, lang: str = "en") -> str:
         """Render a page with menu and footer.
 
         Args:
             title: title of the page.
             content: the html of the page body.
+            lang: the language of the page.
 
         Returns:
             the complete html page.
         """
-        links = "\n".join(entry.as_html() for entry in self.menu())
+        links = "\n".join(entry.as_html() for entry in self.menu(lang))
         site_title = html.escape(self.config.title)
         menu_icon = svg("menu")
         page = f"""<!DOCTYPE html>
-<html lang="en">
+<html lang="{lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -479,6 +508,7 @@ td, th {{ text-align: left; padding: .2em .8em .2em 0; }}
   <button class="hamburger" onclick="toggleMenu()" title="hide menu">{menu_icon}</button>
   <h1>{site_title}</h1>
 {links}
+  {self.flag_selector(lang)}
 </header>
 <main>
 {content}
@@ -495,58 +525,61 @@ function toggleMenu() {{
 """
         return page
 
-    def demo_card(self) -> str:
+    def demo_card(self, lang: str = "en") -> str:
         """The demo section of the home page - the main_demo of this site.
+
+        Args:
+            lang: the language of the card.
 
         Returns:
             the demo card markup; empty where the main_demo does not
             resolve, so a misconfigured site still serves its home page.
         """
+        t = texts(lang)
         card = ""
         directory = self.reels_found.by_acronym()
         main_demo = directory.get(self.config.main_demo)
         if main_demo and main_demo.is_demo:
             url = self.reel_url(main_demo)
             card = (
-                '<h2>Demo</h2>\n<div class="card">\n'
-                f'See a reel for yourself: <a href="{html.escape(url)}">'
+                f'<h2>{t["demo"]}</h2>\n<div class="card">\n'
+                f'{t["demo_text"]}: <a href="{html.escape(url)}">'
                 f"{html.escape(main_demo.title)}</a> "
-                f"({main_demo.hop_count} hops) - inspect it in true "
-                "inspection mode; your verdicts stay on your device.\n</div>"
+                f'({main_demo.hop_count} {t["hops"]}) - {t["demo_hint"]}\n</div>'
             )
         return card
 
-    def home(self) -> str:
-        """The home page - what this site is and the two ways in."""
-        intro = self.config.intro or (
-            "This site keeps the reels of recorded sessions - "
-            "a video, the document derived from it and the evidence frames."
-        )
+    def home(self, lang: str = "en") -> str:
+        """The home page - what this site is and the two ways in.
+
+        Args:
+            lang: the language of the page.
+        """
+        t = texts(lang)
+        intro = html.escape(self.config.intro) if self.config.intro else t["intro"]
         content = f"""<div class="card">
-{html.escape(intro)}
+{intro}
 </div>
-<h2>Reviewing</h2>
+<h2>{t["reviewing"]}</h2>
 <div class="card">
-A review is addressed by its own url. If you were invited to review, follow the
-link you received by mail - it opens the reels of your review. There is no
-account and no password, and the link keeps working when reels are added.
+{t["reviewing_text"]}
 </div>
-<h2>Browsing</h2>
+<h2>{t["browsing"]}</h2>
 <div class="card">
-The reels this site makes public are listed under <a href="/reels">reels</a>.
+{t["browsing_text"]}
 </div>
-{self.demo_card()}
+{self.demo_card(lang)}
 <h2>Reel Driven Development</h2>
 <div class="card">
-The reels are produced with
+{t["rdd_text"]}
 <a href="{html.escape(self.config.cm_url)}" target=_blank>reel-driven-development</a>,
-free software under Apache-2.0, so any organization can run a site like this one.
+{t["rdd_text2"]}
 </div>
 """
-        page = self.page("home", content)
+        page = self.page(t["home"], content, lang)
         return page
 
-    def reels(self, review: Optional[Review] = None) -> str:
+    def reels(self, review: Optional[Review] = None, lang: str = "en") -> str:
         """The reels directory as the holder of the given right sees it.
 
         Anyone sees the public and demo reels; a Review right adds its
@@ -554,15 +587,17 @@ free software under Apache-2.0, so any organization can run a site like this one
 
         Args:
             review: the review right; None for the anonymous directory.
+            lang: the language of the page.
 
         Returns:
             the reels directory page.
         """
+        t = texts(lang)
         granted = review.reels if review else None
         visible_reels = self.reels_found.visible(granted)
         heading = "Reels"
         if review:
-            heading = f"Reels - review by {review.person}"
+            heading = t["review_by"].format(person=review.person)
         if visible_reels:
             rows = "\n".join(
                 f'<tr><td><a href="{html.escape(self.reel_url(reel, review))}">'
@@ -574,15 +609,16 @@ free software under Apache-2.0, so any organization can run a site like this one
             )
             content = (
                 f'<h2>{html.escape(heading)}</h2>\n<div class="card">\n<table>\n'
-                f"<tr><th>reel</th><th>title</th><th>hops</th><th>status</th></tr>\n"
+                f'<tr><th>{t["reel"]}</th><th>{t["title"]}</th>'
+                f'<th>{t["hops"]}</th><th>{t["status"]}</th></tr>\n'
                 f"{rows}\n</table>\n</div>"
             )
         else:
             content = (
                 f'<h2>{html.escape(heading)}</h2>\n<div class="card">\n'
-                "This site makes no reel public yet.\n</div>"
+                f'{t["no_reels"]}\n</div>'
             )
-        page = self.page("reels", content)
+        page = self.page(t["reels"], content, lang)
         return page
 
     def installation(self, reviews_file: str) -> str:
@@ -618,50 +654,57 @@ never mailed, never logged and never minted via this webservice.
         page = self.page("installation mode", content)
         return page
 
-    def not_found(self, path: str) -> str:
+    def not_found(self, path: str, lang: str = "en") -> str:
         """The framed 404 page - it shows like any other page, with an
         example of a valid address.
 
         Args:
             path: the path that has no page.
+            lang: the language of the page.
 
         Returns:
             the framed 404 page.
         """
+        t = texts(lang)
         example = "/reels"
         directory = self.reels_found.by_acronym()
         main_demo = directory.get(self.config.main_demo)
         if main_demo and main_demo.is_demo:
             example = self.reel_url(main_demo)
         content = (
-            "<h2>404 - not found</h2>\n"
-            '<div class="card">\nThere is no page at '
+            f'<h2>404 - {t["not_found"]}</h2>\n'
+            f'<div class="card">\n{t["no_page"]} '
             f"<code>{html.escape(path)}</code>.\n</div>\n"
-            '<div class="card">\nExample of a valid address: '
+            f'<div class="card">\n{t["example"]}: '
             f'<a href="{html.escape(example)}">{html.escape(example)}</a>; '
-            'the reels of this site are listed under <a href="/reels">reels</a>.'
+            f'{t["reels_listed"]}'
             "\n</div>"
         )
-        page = self.page("not found", content)
+        page = self.page(t["not_found"], content, lang)
         return page
 
-    def about(self) -> str:
-        """The about page - version, license and repository."""
+    def about(self, lang: str = "en") -> str:
+        """The about page - version, license and repository.
+
+        Args:
+            lang: the language of the page.
+        """
+        t = texts(lang)
         version = self.version
-        content = f"""<h2>About</h2>
+        content = f"""<h2>{t["about_heading"]}</h2>
 <div class="card">
 <table>
-<tr><th>site</th><td>{html.escape(self.config.title)}</td></tr>
-<tr><th>software</th><td>{html.escape(version.name)}</td></tr>
-<tr><th>version</th><td>{html.escape(version.version)}</td></tr>
-<tr><th>updated</th><td>{html.escape(version.updated)}</td></tr>
-<tr><th>license</th><td>Apache-2.0</td></tr>
-<tr><th>source</th><td><a href="{html.escape(self.config.cm_url)}" target=_blank>{html.escape(self.config.cm_url)}</a></td></tr>
-<tr><th>documentation</th><td><a href="{html.escape(self.config.doc_url)}" target=_blank>{html.escape(self.config.doc_url)}</a></td></tr>
+<tr><th>{t["site"]}</th><td>{html.escape(self.config.title)}</td></tr>
+<tr><th>{t["software"]}</th><td>{html.escape(version.name)}</td></tr>
+<tr><th>{t["version"]}</th><td>{html.escape(version.version)}</td></tr>
+<tr><th>{t["updated"]}</th><td>{html.escape(version.updated)}</td></tr>
+<tr><th>{t["license"]}</th><td>Apache-2.0</td></tr>
+<tr><th>{t["source"]}</th><td><a href="{html.escape(self.config.cm_url)}" target=_blank>{html.escape(self.config.cm_url)}</a></td></tr>
+<tr><th>{t["documentation"]}</th><td><a href="{html.escape(self.config.doc_url)}" target=_blank>{html.escape(self.config.doc_url)}</a></td></tr>
 </table>
 </div>
 """
-        page = self.page("about", content)
+        page = self.page(t["about"], content, lang)
         return page
 
 

@@ -22,9 +22,46 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from swagger_ui_bundle import swagger_ui_path
 
+from rdd.i18n import LANGUAGES, pick_language
 from rdd.rdd_site import Reel, ReelSite, Review
 
 TARPIT_SECONDS = 0.5
+
+
+def lang_of(request: Request) -> str:
+    """The language of the given request.
+
+    Per the i18n issue the default is the browser setting; an explicit
+    ?lang= wins and is remembered by the cookie the response sets.
+
+    Args:
+        request: the request.
+
+    Returns:
+        the language code.
+    """
+    lang = pick_language(
+        query_lang=request.query_params.get("lang"),
+        cookie_lang=request.cookies.get("lang"),
+        accept_language=request.headers.get("accept-language"),
+    )
+    return lang
+
+
+def remember_lang(request: Request, response: HTMLResponse) -> HTMLResponse:
+    """Remember an explicit language choice in the cookie.
+
+    Args:
+        request: the request whose ?lang= is the choice, if any.
+        response: the response to carry the cookie.
+
+    Returns:
+        the response.
+    """
+    query_lang = request.query_params.get("lang")
+    if query_lang in LANGUAGES:
+        response.set_cookie("lang", query_lang)
+    return response
 
 
 def page_response(page: str, status: int = 200) -> HTMLResponse:
@@ -76,20 +113,23 @@ class ReelApp:
         )
         self.add_routes()
 
-    def not_found(self, path: str, tarpit: bool = False) -> HTMLResponse:
+    def not_found(
+        self, path: str, tarpit: bool = False, lang: str = "en"
+    ) -> HTMLResponse:
         """The framed 404 response.
 
         Args:
             path: the path that has no page.
             tarpit: delay the answer so tokens and private acronyms
                 cannot be probed.
+            lang: the language of the page.
 
         Returns:
             the framed 404 page as a response.
         """
         if tarpit:
             time.sleep(TARPIT_SECONDS)
-        response = page_response(self.site.not_found(path), status=404)
+        response = page_response(self.site.not_found(path, lang), status=404)
         return response
 
     def address_parts(
@@ -135,19 +175,22 @@ class ReelApp:
 
         @app.get("/", response_class=HTMLResponse, summary="the home page")
         @app.get("/index.html", response_class=HTMLResponse, include_in_schema=False)
-        def home() -> HTMLResponse:
+        def home(request: Request) -> HTMLResponse:
             """The home page - what this site is and the ways in."""
-            return page_response(site.home())
+            lang = lang_of(request)
+            return remember_lang(request, page_response(site.home(lang)))
 
         @app.get("/reels", response_class=HTMLResponse, summary="the reels directory")
-        def reels() -> HTMLResponse:
+        def reels(request: Request) -> HTMLResponse:
             """The public reels directory."""
-            return page_response(site.reels())
+            lang = lang_of(request)
+            return remember_lang(request, page_response(site.reels(lang=lang)))
 
         @app.get("/about", response_class=HTMLResponse, summary="the about page")
-        def about() -> HTMLResponse:
+        def about(request: Request) -> HTMLResponse:
             """The about page - version, license and repository."""
-            return page_response(site.about())
+            lang = lang_of(request)
+            return remember_lang(request, page_response(site.about(lang)))
 
         @app.get("/docs", include_in_schema=False)
         def docs() -> HTMLResponse:
@@ -223,14 +266,17 @@ class ReelApp:
             A bare token answers the reels directory of its review.
             """
             path = request.url.path
+            lang = lang_of(request)
             parts = [urllib.parse.unquote(part) for part in rest.split("/")]
             review = site.reviews.by_token().get(parts[0])
             if review is not None:
                 parts = parts[1:]
                 if not parts or parts == [""]:
-                    return page_response(site.reels(review))
+                    return remember_lang(
+                        request, page_response(site.reels(review, lang=lang))
+                    )
             elif not rest or rest == "":
-                return page_response(site.reels())
+                return remember_lang(request, page_response(site.reels(lang=lang)))
             reel, file_parts = site.resolve_reel(parts)
             if reel is None or not site.allowed(reel, review):
                 return self.not_found(path, tarpit=True)
@@ -239,7 +285,7 @@ class ReelApp:
                     # the reel page needs its trailing slash so its relative
                     # review and file links resolve below the reel
                     return RedirectResponse(path + "/", status_code=301)
-                return page_response(site.reel_page(reel))
+                return remember_lang(request, page_response(site.reel_page(reel, lang)))
             if file_parts in (["review"], ["reelreview.html"]):
                 return page_response(site.review_page())
             if len(file_parts) == 1 and file_parts[0] in reel.hop_slugs():
@@ -255,7 +301,8 @@ class ReelApp:
         @app.exception_handler(404)
         async def framed_404(request: Request, _exception) -> HTMLResponse:
             """Any miss answers the framed 404 page."""
-            return page_response(site.not_found(request.url.path), status=404)
+            page = site.not_found(request.url.path, lang_of(request))
+            return page_response(page, status=404)
 
 
 class InstallationApp:

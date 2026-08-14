@@ -350,6 +350,25 @@ class TestReelDelivery(Basetest):
         status, _body, headers = self.get("/static/swagger/swagger-ui-bundle.js")
         self.assertEqual(200, status)
 
+    def testI18n(self):
+        """Test i18n - the browser setting decides the default, ?lang=
+        overrides and is remembered, the selector shows a flag."""
+        request = urllib.request.Request(f"{self.base_url}/")
+        request.add_header("Accept-Language", "de-DE,de;q=0.9,en;q=0.8")
+        with urllib.request.urlopen(request) as response:
+            body = response.read()
+        self.assertIn('<html lang="de"'.encode(), body)
+        self.assertIn("Stöbern".encode(), body)
+        self.assertIn('class="flag"'.encode(), body)
+        request = urllib.request.Request(f"{self.base_url}/?lang=en")
+        request.add_header("Accept-Language", "de")
+        with urllib.request.urlopen(request) as response:
+            body = response.read()
+            cookie = response.headers.get("Set-Cookie") or ""
+        self.assertIn('<html lang="en"'.encode(), body)
+        self.assertIn(b"Browsing", body)
+        self.assertIn("lang=en", cookie)
+
     def testEscapeIsNoEscape(self):
         """Test that a path may not leave its reel folder."""
         status, _body, _headers = self.get("/reels/genwiki-walk/../persons.yaml")
