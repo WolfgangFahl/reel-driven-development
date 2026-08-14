@@ -10,19 +10,23 @@ the tool names stay available as entry points of their own.
 """
 
 import argparse
+import importlib
 import sys
-from typing import Callable, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from basemkit.base_cmd import BaseCmd
 
-from rdd import adoc_cmd, hopdetect_cmd, reelreview_cmd, reelsite_cmd
 from rdd.version import Version
 
-SUBCOMMANDS: Dict[str, Callable[[Optional[List[str]]], int]] = {
-    "detect": hopdetect_cmd.main,
-    "doc": adoc_cmd.main,
-    "review": reelreview_cmd.main,
-    "site": reelsite_cmd.main,
+# the modules are named, not imported - a subcommand's dependency chain
+# (detect and doc need cv2 and with it libGL) must not load unless that
+# subcommand is dispatched: a headless serving host runs rdd site
+# without any display library
+SUBCOMMANDS: Dict[str, str] = {
+    "detect": "rdd.hopdetect_cmd",
+    "doc": "rdd.adoc_cmd",
+    "review": "rdd.reelreview_cmd",
+    "site": "rdd.reelsite_cmd",
 }
 
 
@@ -83,9 +87,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         KeyboardInterrupt, 2 = Exception of the dispatcher itself.
     """
     args = sys.argv[1:] if argv is None else argv
-    subcommand = SUBCOMMANDS.get(args[0]) if args else None
-    if subcommand is not None:
-        exit_code = subcommand(args[1:])
+    module_name = SUBCOMMANDS.get(args[0]) if args else None
+    if module_name is not None:
+        module = importlib.import_module(module_name)
+        exit_code = module.main(args[1:])
     else:
         cmd = RddCmd()
         exit_code = cmd.run(args)
