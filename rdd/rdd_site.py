@@ -14,6 +14,7 @@ import json
 import mimetypes
 import os
 import re
+import sys
 import time
 import urllib.parse
 from dataclasses import dataclass, field
@@ -584,7 +585,7 @@ No reel is served in this state.
 <div class="card">
 The owner initializes the site on its host - access administration needs
 ssh and nothing else:
-<pre>reelsite --init</pre>
+<pre>{html.escape(init_command())}</pre>
 The command asks for username, full name, email and url, seeds the owner
 and mints the wildcard owner token. The token is shown once on the
 terminal and written beside the site configuration with mode 600; it is
@@ -837,6 +838,24 @@ class ReelSiteHandler(http.server.BaseHTTPRequestHandler):
         print(f"{self.address_string()} {format % args}", flush=True)
 
 
+def init_command() -> str:
+    """The init command as this installation runs it.
+
+    A user cannot be expected to know a command name, and the venv of a
+    service is not on anybody's PATH - so the command is named with the
+    absolute path of the running installation where the rdd dispatcher
+    lies beside the interpreter, and by its bare name otherwise.
+
+    Returns:
+        the command that initializes this site.
+    """
+    rdd_command = os.path.join(os.path.dirname(sys.executable), "rdd")
+    if not os.path.isfile(rdd_command):
+        rdd_command = "rdd"
+    command = f"{rdd_command} site --init"
+    return command
+
+
 class InstallationHandler(http.server.BaseHTTPRequestHandler):
     """Serve the installation mode state.
 
@@ -896,7 +915,7 @@ def serve(
             "BoundInstallationHandler", (InstallationHandler,), {"page": page}
         )
         print(
-            f"rdd_site: installation mode - no {reviews_file}; " "run reelsite --init",
+            f"rdd_site: installation mode - no {reviews_file}; run {init_command()}",
             flush=True,
         )
         with http.server.ThreadingHTTPServer((host, config.port), handler) as httpd:

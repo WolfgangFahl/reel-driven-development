@@ -142,7 +142,7 @@ class Mint:
         """
         if not os.path.isfile(self.reviews_path):
             raise ValueError(
-                f"no {self.reviews_path} - initialize the site with reelsite --init"
+                f"no {self.reviews_path} - initialize the site with rdd site --init"
             )
         reviews = Reviews.of_path(self.reviews_path)
         review = Review(

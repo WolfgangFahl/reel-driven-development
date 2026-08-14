@@ -61,7 +61,8 @@ artifacts = ["rdd/resources/*"]
 "rdd" = "rdd"
 
 [project.scripts]
-hopdetect = "rdd.rdd_cmd:main"
+hopdetect = "rdd.hopdetect_cmd:main"
+rdd = "rdd.rdd_cmd:main"
 reeldoc = "rdd.adoc_cmd:main"
 reelreview = "rdd.reelreview_cmd:main"
 reelsite = "rdd.reelsite_cmd:main"

@@ -30,6 +30,21 @@ walks through a system while talking. RDD treats the reel as a graph walk:
 The first tooling milestone is HopDetection - see
 [issue #1](https://github.com/WolfgangFahl/reel-driven-development/issues/1).
 
+## rdd - the one command name
+
+`rdd` dispatches to the tools of the pipeline, so a user has to know
+one name - the name of what we do:
+
+| subcommand | tool | purpose |
+| --- | --- | --- |
+| `rdd detect` | `hopdetect` | find the hops of a reel and capture the evidence frames |
+| `rdd doc` | `reeldoc` | generate the reel document from a Recording |
+| `rdd review` | `reelreview` | serve one reel folder for review |
+| `rdd site` | `reelsite` | serve the reel site; `--init` initializes it, `--mint` mints a review token |
+
+`rdd` without a subcommand lists them; the tool names stay available as
+entry points of their own.
+
 ## hopdetect flags
 
 | flag | meaning | default | change it when |

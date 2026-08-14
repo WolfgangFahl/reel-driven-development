@@ -117,5 +117,5 @@ class TestMint(Basetest):
                 time.sleep(0.1)
         self.assertEqual(503, status)
         self.assertIn("Installation mode", page)
-        self.assertIn("reelsite --init", page)
+        self.assertIn("site --init", page)
         self.assertIn(missing, page)
