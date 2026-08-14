@@ -17,62 +17,62 @@ recording:
     neuen Inline-Anzeige der Dateien, die überarbeiteten Icons und die Kategorie SVG.'
 hops:
 - pos: 1
-  time: '20:02'
+  time: '00:02'
   node: hop01
   summary: 32 change(s) [1200.06s,1202.84s], max score 50.8, settled at 1202.84s
-  screenshot: hop01.jpg
+  screenshot: hop-00h00m02s.jpg
 - pos: 2
-  time: '20:06'
+  time: '00:06'
   node: hop02
   summary: 11 change(s) [1205.42s,1206.83s], max score 49.8, settled at 1206.83s
-  screenshot: hop02.jpg
+  screenshot: hop-00h00m06s.jpg
 - pos: 3
-  time: '20:10'
+  time: '00:10'
   node: hop03
   summary: 24 change(s) [1209.05s,1210.99s], max score 65.5, settled at 1210.99s
-  screenshot: hop03.jpg
+  screenshot: hop-00h00m10s.jpg
 - pos: 4
-  time: '20:20'
+  time: '00:20'
   node: hop04
   summary: 94 change(s) [1212.60s,1220.45s], max score 245.4, settled at 1220.45s
-  screenshot: hop04.jpg
+  screenshot: hop-00h00m20s.jpg
 - pos: 5
-  time: '20:28'
+  time: '00:28'
   node: hop05
   summary: 57 change(s) [1221.86s,1228.62s], max score 240.8, settled at 1228.62s
-  screenshot: hop05.jpg
+  screenshot: hop-00h00m28s.jpg
 - pos: 6
-  time: '20:34'
+  time: '00:34'
   node: hop06
   summary: 40 change(s) [1229.74s,1234.13s], max score 130.5, settled at 1234.13s
-  screenshot: hop06.jpg
+  screenshot: hop-00h00m34s.jpg
 - pos: 7
-  time: '20:37'
+  time: '00:37'
   node: hop07
   summary: 2 change(s) [1237.73s,1237.82s], max score 76.8, settled at 1237.82s
-  screenshot: hop07.jpg
+  screenshot: hop-00h00m37s.jpg
 - pos: 8
-  time: '20:41'
+  time: '00:41'
   node: hop08
   summary: 20 change(s) [1239.11s,1241.02s], max score 30.2, settled at 1241.02s
-  screenshot: hop08.jpg
+  screenshot: hop-00h00m41s.jpg
 - pos: 9
-  time: '20:45'
+  time: '00:45'
   node: hop09
   summary: 2 change(s) [1245.50s,1245.59s], max score 53.5, settled at 1245.59s
-  screenshot: hop09.jpg
+  screenshot: hop-00h00m45s.jpg
 - pos: 10
-  time: '20:47'
+  time: '00:47'
   node: hop10
   summary: 2 change(s) [1247.58s,1247.67s], max score 243.3, settled at 1247.67s
-  screenshot: hop10.jpg
+  screenshot: hop-00h00m47s.jpg
 - pos: 11
-  time: '20:50'
+  time: '00:50'
   node: hop11
   summary: 3 change(s) [1249.75s,1250.24s], max score 240.5, settled at 1250.24s
-  screenshot: hop11.jpg
+  screenshot: hop-00h00m50s.jpg
 - pos: 12
-  time: '20:59'
+  time: '00:59'
   node: hop12
   summary: 73 change(s) [1252.59s,1259.85s], max score 158.0, settled at 1259.85s
-  screenshot: hop12.jpg
+  screenshot: hop-00h00m59s.jpg

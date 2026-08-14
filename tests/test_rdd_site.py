@@ -265,7 +265,7 @@ class TestReelDelivery(Basetest):
         self.assertEqual("genwiki-walk", reel_data["recording"]["acronym"])
         self.assertTrue(reel_data["recording"]["summary"].endswith("Kategorie SVG."))
         self.assertEqual(12, len(reel_data["hops"]))
-        self.assertEqual("hop01.jpg", reel_data["hops"][0]["screenshot"])
+        self.assertEqual("hop-00h00m02s.jpg", reel_data["hops"][0]["screenshot"])
 
     def testStaleCopyIsShadowed(self):
         """Test that a reelreview.html in a reel folder is neither listed
@@ -303,17 +303,17 @@ class TestReelDelivery(Basetest):
     def testHopUrl(self):
         """Test the Hop url decision - shortcut and lengthy PID iri
         answer the review, a slug naming no hop is 404."""
-        status, body, _headers = self.get("/reels/genwiki-walk/hop01")
+        status, body, _headers = self.get("/reels/genwiki-walk/hop-00h00m02s")
         self.assertEqual(200, status)
         self.assertIn(b"reelreview", body)
-        status, body, _headers = self.get("/reels/2026/05/genwiki-walk/hop01")
+        status, body, _headers = self.get("/reels/2026/05/genwiki-walk/hop-00h00m02s")
         self.assertEqual(200, status)
         self.assertIn(b"reelreview", body)
         status, _body, _headers = self.get("/reels/genwiki-walk/hop-99h99m99s")
         self.assertEqual(404, status)
-        status, body, _headers = self.get(f"/reels/{self.TOKEN}/genwiki-walk/hop01")
+        status, body, _headers = self.get(f"/reels/{self.TOKEN}/genwiki-walk/hop-00h00m02s")
         self.assertEqual(200, status)
-        status, _body, _headers = self.get(f"/reels/{self.TOKEN}/secret-reel/hop01")
+        status, _body, _headers = self.get(f"/reels/{self.TOKEN}/secret-reel/hop-00h00m02s")
         self.assertEqual(404, status)
         status, body, _headers = self.get("/reels/2026/05/genwiki-walk/reel.yaml")
         self.assertEqual(200, status)
