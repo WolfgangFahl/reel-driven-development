@@ -16,6 +16,20 @@ See a reel for yourself: the [GenWiki demo reel](https://rdd.bitplan.com/reels/R
 your verdicts stay on your device. Reviewers get a link by mail - no account,
 no password.
 
+## Installation
+
+```bash
+pip install reel-driven-development
+```
+
+or isolated with [pipx](https://pipx.pypa.io/):
+
+```bash
+pipx install reel-driven-development
+```
+
+Both put the `rdd` command and the tool entry points on the PATH.
+
 ## Documentation
 [Wiki](https://wiki.bitplan.com/index.php/Reel_Driven_Development)
 
@@ -91,7 +105,10 @@ Cuts found on [examples/recordings/genwiki-walk](examples/recordings/genwiki-wal
 
 A run writes to `--out`:
 
-* `hopNN.jpg` - the evidence frame of each hop, the full frame as recorded
+* `hop-<hh>h<mm>m<ss>s[<ms>ms].jpg` - the evidence frame of each hop, the
+  full frame as recorded, named by its time offset so curation never
+  renames a surviving frame
+  ([issue #21](https://github.com/WolfgangFahl/reel-driven-development/issues/21))
 * `hops.yaml` - the hop records, whose field names are the property names of
   [Concept:HopContent](https://contexts.bitplan.com/index.php/Concept:HopContent);
   `node`, `url` and `summary` stay empty because they come from the transcript
