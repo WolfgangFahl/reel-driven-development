@@ -5,12 +5,14 @@ test the reel site - reels directory, main demo, access rights and delivery
 @author: wf
 """
 
+import io
 import json
 import os
 import threading
 import time
 import urllib.error
 import urllib.request
+import zipfile
 from typing import Optional, Tuple
 
 import uvicorn
@@ -372,6 +374,33 @@ class TestReelDelivery(Basetest):
     def testEscapeIsNoEscape(self):
         """Test that a path may not leave its reel folder."""
         status, _body, _headers = self.get("/reels/genwiki-walk/../persons.yaml")
+        self.assertEqual(404, status)
+
+    def testVerdictPage(self):
+        """Test that the verdict is its own page per the Reel verdict
+        decision - served under its own address, right checked, offering
+        the review folder and the zip download."""
+        status, body, _headers = self.get("/reels/genwiki-walk/verdict")
+        self.assertEqual(200, status)
+        self.assertIn(b"reel verdict", body)
+        self.assertIn(b'href="./"', body)
+        self.assertIn(b'href="api/zip"', body)
+        status, _body, _headers = self.get("/reels/secret-reel/verdict")
+        self.assertEqual(404, status)
+        status, _body, _headers = self.get(f"/reels/{self.TOKEN}/secret-reel/verdict")
+        self.assertEqual(200, status)
+
+    def testZip(self):
+        """Test that the verdict page's download answers the reel folder as one
+        zip, right checked."""
+        status, body, headers = self.get("/reels/genwiki-walk/api/zip")
+        self.assertEqual(200, status)
+        self.assertEqual("application/zip", headers.get("content-type"))
+        with zipfile.ZipFile(io.BytesIO(body)) as zip_file:
+            names = zip_file.namelist()
+        self.assertTrue(any(name.endswith("reel.yaml") for name in names))
+        self.assertTrue(all(name.startswith("genwiki-walk/") for name in names))
+        status, _body, _headers = self.get("/reels/secret-reel/api/zip")
         self.assertEqual(404, status)
 
 

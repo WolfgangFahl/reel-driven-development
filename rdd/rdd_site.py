@@ -12,7 +12,9 @@ import html
 import os
 import re
 import sys
+import tempfile
 import urllib.parse
+import zipfile
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
@@ -417,6 +419,32 @@ class ReelSite:
             flags=re.DOTALL,
         )
         return page
+
+    def reel_zip(self, reel: Reel) -> str:
+        """Zip the folder of the given reel into a temporary file.
+
+        Per the Reel verdict decision the verdict page offers the reel
+        folder as one download; videos do not compress, so the entries
+        are stored.
+
+        Args:
+            reel: the reel.
+
+        Returns:
+            the path of the temporary zip file - the caller removes it
+            after delivery.
+        """
+        handle, zip_path = tempfile.mkstemp(suffix=".zip", prefix=f"{reel.acronym}-")
+        os.close(handle)
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_STORED) as zip_file:
+            for root, _dirs, files in os.walk(reel.path):
+                for file_name in sorted(files):
+                    file_path = os.path.join(root, file_name)
+                    arcname = os.path.join(
+                        reel.acronym, os.path.relpath(file_path, reel.path)
+                    )
+                    zip_file.write(file_path, arcname)
+        return zip_path
 
     def menu(self, lang: str = "en") -> List[MenuEntry]:
         """The menu entries - settings and chat are dropped, a visitor has

@@ -20,6 +20,7 @@ from fastapi import FastAPI, Request
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.background import BackgroundTask
 from swagger_ui_bundle import swagger_ui_path
 
 from rdd.i18n import LANGUAGES, pick_language
@@ -285,6 +286,24 @@ class ReelApp:
                 return self.not_found(request, tarpit=True)
             return JSONResponse(reel.hop_set.to_dict() if reel.hop_set else {})
 
+        @app.get(
+            "/reels/{address:path}/api/zip",
+            summary="the reel folder as one zip",
+        )
+        def api_zip(address: str, request: Request):
+            """The reel folder zipped - the verdict page's download per the
+            Reel verdict decision."""
+            reel, _review, file_parts = self.checked_reel(address)
+            if reel is None or file_parts:
+                return self.not_found(request, tarpit=True)
+            zip_path = site.reel_zip(reel)
+            return FileResponse(
+                zip_path,
+                media_type="application/zip",
+                filename=f"{reel.acronym}.zip",
+                background=BackgroundTask(os.remove, zip_path),
+            )
+
         @app.post(
             "/reels/{address:path}/api/{action}",
             summary="the write api - true inspection mode",
@@ -335,7 +354,7 @@ class ReelApp:
                     # review and file links resolve below the reel
                     return RedirectResponse(path + "/", status_code=301)
                 return remember_lang(request, page_response(site.reel_page(reel, lang)))
-            if file_parts in (["review"], ["reelreview.html"]):
+            if file_parts in (["review"], ["reelreview.html"], ["verdict"]):
                 return page_response(site.review_page())
             if len(file_parts) == 1 and file_parts[0] in reel.hop_slugs():
                 return page_response(site.review_page())
