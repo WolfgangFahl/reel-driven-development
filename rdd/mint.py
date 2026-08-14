@@ -25,7 +25,7 @@ class Mint:
     right per the Reel Review decision.
     """
 
-    OWNER_LINK_FILE = "owner_link.yaml"
+    OWNER_LINK_FILE = "owner_link.txt"
 
     def __init__(self, config: RddSiteConfig, rdd_path: str = "~/.rdd"):
         """Initialize with the site configuration.
@@ -108,17 +108,26 @@ class Mint:
             reels=[Review.WILDCARD],
         )
         reviews = Reviews(reviews=[review])
-        reviews.save_to_yaml_file(self.reviews_path)
+        self.save_reviews(reviews)
         owner_url = self.review_url(review)
         descriptor = os.open(
             self.owner_link_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600
         )
         with os.fdopen(descriptor, "w") as owner_link_file:
-            owner_link_file.write(
-                f"# the owner link of this reel site - possession is the right\n"
-                f"url: {owner_url}\n"
-            )
+            owner_link_file.write(f"{owner_url}\n")
         return owner_url
+
+    def save_reviews(self, reviews: Reviews):
+        """Save the given reviews with owner-only permissions.
+
+        The tokens in reviews.yaml are the rights themselves, so the
+        file is as protected as the owner link.
+
+        Args:
+            reviews: the reviews to save.
+        """
+        reviews.save_to_yaml_file(self.reviews_path)
+        os.chmod(self.reviews_path, 0o600)
 
     def mint_review(
         self,
@@ -152,6 +161,6 @@ class Mint:
             reels=list(reels or []),
         )
         reviews.reviews.append(review)
-        reviews.save_to_yaml_file(self.reviews_path)
+        self.save_reviews(reviews)
         url = self.review_url(review)
         return url

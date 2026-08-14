@@ -50,7 +50,10 @@ class TestMint(Basetest):
         mode = stat.S_IMODE(os.stat(self.mint.owner_link_path).st_mode)
         self.assertEqual(0o600, mode)
         with open(self.mint.owner_link_path) as owner_link_file:
-            self.assertIn(owner_url, owner_link_file.read())
+            # the file holds the owner link and nothing else
+            self.assertEqual(f"{owner_url}\n", owner_link_file.read())
+        reviews_mode = stat.S_IMODE(os.stat(self.mint.reviews_path).st_mode)
+        self.assertEqual(0o600, reviews_mode)
         with self.assertRaises(ValueError):
             self.mint.init_site("wf", "Wolfgang Fahl", "", "")
 
