@@ -118,10 +118,10 @@ kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 .3em; font
 </header>
 <nav>
   <span class="pager">
-    <button onclick="go(cur-1)">◀</button>
-    <input id="jump" type="number" min="1" onchange="go(+this.value-1)">
+    <button onclick="step(-1)">◀</button>
+    <input id="jump" type="number" min="0" onchange="goPos(+this.value)">
     <span id="total"></span>
-    <button onclick="go(cur+1)">▶</button>
+    <button onclick="step(1)">▶</button>
   </span>
   <a class="folder" href="./" data-i18n="folder" data-i18n-title="folder_title" title="the review folder of this reel">folder</a>
   <span id="send">
@@ -173,7 +173,6 @@ kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 .3em; font
   <label><span data-i18n="reason_text">reason / text</span> <input id="reel-text"></label>
   <label><span data-i18n="signature">pseudo signature</span> <input id="signature" placeholder="e.g. 👁️🧑 Wolfgang Fahl"></label>
   <div id="reelactions">
-    <button onclick="startPass()" data-i18n="review_hops">review the hops</button>
     <a href="api/zip" data-i18n="zip" data-i18n-title="zip_title" title="the reel folder as one zip">download reel folder (zip)</a>
   </div>
   </div>
@@ -185,7 +184,7 @@ kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 .3em; font
    reel-feedback.yaml stay canonical - only labels are translated. */
 /* <i18n> */
 const LANG = "en";
-const T = {"confirm":"confirm","reject":"reject","hide":"hide","modify":"modify","open":"open","hop":"hop","save":"save","download":"download","upload":"upload","mail":"mail","folder":"folder","reel_verdict":"reel verdict","reason_text":"reason / text","signature":"pseudo signature","review_hops":"review the hops","zip":"download reel folder (zip)","reason_opt":"reason (optional)","mod_text":"modification text (required)","node":"node","url":"url","summary":"summary","audio":"audio","saved":"saved reel-feedback.yaml","save_failed":"save failed:","uploaded":"uploaded to","upload_failed":"upload failed:","need_text":"modify needs a text: hop pos","need_signature":"pseudo signature required","folder_title":"the review folder of this reel","zip_title":"the reel folder as one zip","pid_title":"the persistent url of this hop","no_feedback_url":"no feedback_url in reel.yaml config","mail_body":"reel-feedback.yaml saved in the recording folder - attach it from there."};
+const T = {"confirm":"confirm","reject":"reject","hide":"hide","modify":"modify","open":"open","hop":"hop","save":"save","download":"download","upload":"upload","mail":"mail","folder":"folder","reel_verdict":"reel verdict","reason_text":"reason / text","signature":"pseudo signature","zip":"download reel folder (zip)","reason_opt":"reason (optional)","mod_text":"modification text (required)","node":"node","url":"url","summary":"summary","audio":"audio","saved":"saved reel-feedback.yaml","save_failed":"save failed:","uploaded":"uploaded to","upload_failed":"upload failed:","need_text":"modify needs a text: hop pos","need_signature":"pseudo signature required","folder_title":"the review folder of this reel","zip_title":"the reel folder as one zip","pid_title":"the persistent url of this hop","no_feedback_url":"no feedback_url in reel.yaml config","mail_body":"reel-feedback.yaml saved in the recording folder - attach it from there."};
 /* </i18n> */
 function tr(key) { return T[key] || key.replace(/_/g, " "); }
 function translate() {
@@ -250,30 +249,38 @@ async function load() {
   if (feedback.reel.text) $("reel-text").value = feedback.reel.text;
   paintReelVerdict();
   buildStrip();
-  /* per the Reel verdict decision the verdict page opens the review;
-     a hop url opens the review at that hop */
+  /* the review starts with page 1; the verdict is page 0, reached
+     deliberately - by stepping back, jumping to 0 or wrapping past
+     the last page. A hop url opens the review at that hop. */
   const last = decodeURIComponent(location.pathname.split("/").pop());
+  if (last === "verdict") { showVerdict(); return; }
   const start = reel.hops.findIndex(h => slugOf(h) === last);
-  if (start >= 0) go(start); else showVerdict();
+  go(start >= 0 ? start : 0);
 }
 
-/* the verdict page per the Reel verdict decision - a page of the
-   review at the position after the last hop, opened first and
-   returned to when the pass is done */
+/* the verdict page per the Reel verdict decision - page 0 of the
+   review's walk, opened first and reached again cyclically after the
+   last hop */
 function showVerdict() {
   if (!reel) return;
   collect();
   cur = reel.hops.length;
   document.body.classList.add("verdictview");
   history.replaceState(null, "", "verdict");
-  $("jump").value = "";
+  $("jump").value = 0;
   paintReelVerdict();
   paintStrip();
 }
-function startPass() {
-  /* the pass starts at the first open hop */
-  const open = reel.hops.findIndex(h => !(feedback.hops[h.pos] || {}).verdict);
-  go(open >= 0 ? open : 0);
+/* the walk is cyclic over the pages 0 (verdict) .. N (hops) */
+function pagePos() {
+  return document.body.classList.contains("verdictview") ? 0 : cur + 1;
+}
+function goPos(p) {
+  if (p === 0) showVerdict(); else go(p - 1);
+}
+function step(direction) {
+  const pages = reel.hops.length + 1;
+  goPos((pagePos() + direction + pages) % pages);
 }
 
 /* reel-feedback.yaml round trip */
@@ -519,7 +526,7 @@ document.addEventListener("keydown", e => {
   const actions = {
     c: () => setVerdict("confirm"), r: () => setVerdict("reject"),
     h: () => setVerdict("hide"), m: () => setVerdict("modify"),
-    ArrowLeft: () => go(cur - 1), ArrowRight: () => go(cur + 1), s: save,
+    ArrowLeft: () => step(-1), ArrowRight: () => step(1), s: save,
   };
   if (actions[k]) { e.preventDefault(); actions[k](); }
 });

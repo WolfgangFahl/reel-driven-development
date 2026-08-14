@@ -113,7 +113,6 @@ review:
     reel_verdict: reel verdict
     reason_text: reason / text
     signature: pseudo signature
-    review_hops: review the hops
     zip: download reel folder (zip)
     reason_opt: reason (optional)
     mod_text: modification text (required)
@@ -148,7 +147,6 @@ review:
     reel_verdict: Reel-Urteil
     reason_text: Begründung / Text
     signature: Pseudo-Signatur
-    review_hops: die Hops begutachten
     zip: Reel-Ordner herunterladen (zip)
     reason_opt: Begründung (optional)
     mod_text: Änderungstext (erforderlich)
