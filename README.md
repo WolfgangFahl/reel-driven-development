@@ -28,7 +28,14 @@ or isolated with [pipx](https://pipx.pypa.io/):
 pipx install reel-driven-development
 ```
 
-Both put the `rdd` command and the tool entry points on the PATH.
+Both put the `rdd` command and the tool entry points on the PATH and run
+`rdd site` and `rdd review` - a review only install carries no video
+libraries. `rdd detect` and `rdd doc` read video and need the hopdetect
+extra:
+
+```bash
+pip install 'reel-driven-development[hopdetect]'
+```
 
 ## Documentation
 [Wiki](https://wiki.bitplan.com/index.php/Reel_Driven_Development)

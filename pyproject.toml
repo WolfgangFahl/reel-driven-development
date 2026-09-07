@@ -17,18 +17,6 @@ license = "Apache-2.0"
 dependencies = [
   # https://pypi.org/project/pybasemkit/
   "pybasemkit>=0.2.2",
-  # https://pypi.org/project/scenedetect/
-  "scenedetect>=0.7",
-  # https://pypi.org/project/numpy/
-  # scenedetect delivers frames as numpy arrays
-  # so we need the library to work on these
-  "numpy",
-  # https://pypi.org/project/opencv-python/
-  # scenedetect encodes images with cv2 and pulls it in
-  # we write evidence frames with the same encoder
-  "opencv-python",
-  # https://pypi.org/project/tqdm/
-  "tqdm",
   # https://pypi.org/project/fastapi/
   # the site's web application and its /docs per the OpenAPI docs issue
   "fastapi",
@@ -60,6 +48,24 @@ Source = "https://github.com/WolfgangFahl/reel-driven-development"
 path = "rdd/__init__.py"
 
 [project.optional-dependencies]
+# rdd detect and rdd doc - the detection chain of frame.py, hopdetector.py
+# and adoc.py; a review only site install does not pull these and with
+# them no libGL
+hopdetect = [
+  # https://pypi.org/project/scenedetect/
+  "scenedetect>=0.7",
+  # https://pypi.org/project/numpy/
+  # scenedetect delivers frames as numpy arrays
+  # so we need the library to work on these
+  "numpy",
+  # https://pypi.org/project/opencv-python/
+  # scenedetect encodes images with cv2 and pulls it in
+  # we write evidence frames with the same encoder
+  "opencv-python",
+  # https://pypi.org/project/tqdm/
+  "tqdm",
+]
+all = ["reel-driven-development[hopdetect]"]
 test = []
 
 [tool.hatch.build.targets.wheel]

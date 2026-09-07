@@ -29,6 +29,11 @@ SUBCOMMANDS: Dict[str, str] = {
     "site": "rdd.reelsite_cmd",
 }
 
+# the detection chain is the hopdetect extra - a review only install
+# carries neither cv2 nor scenedetect, and the answer of these two
+# subcommands is the install line, not an import traceback
+HOPDETECT_SUBCOMMANDS = {"detect", "doc"}
+
 
 class RddCmd(BaseCmd):
     """The rdd dispatcher - answers what rdd can do.
@@ -76,6 +81,36 @@ class RddCmd(BaseCmd):
         return handled
 
 
+def dispatch(subcommand: str, module_name: str, argv: List[str]) -> int:
+    """Import the module of a subcommand and run it.
+
+    Args:
+        subcommand: the subcommand as given on the command line.
+        module_name: the module implementing the subcommand.
+        argv: the arguments of the subcommand.
+
+    Returns:
+        the exit code of the subcommand, or 3 if the detection
+        dependencies of the subcommand are not installed.
+    """
+    try:
+        module = importlib.import_module(module_name)
+        exit_code = module.main(argv)
+    except ImportError as ex:
+        if subcommand not in HOPDETECT_SUBCOMMANDS:
+            raise
+        print(
+            f"rdd {subcommand} needs the detection dependencies - {ex.name} is missing",
+            file=sys.stderr,
+        )
+        print(
+            "pip install 'reel-driven-development[hopdetect]'",
+            file=sys.stderr,
+        )
+        exit_code = 3
+    return exit_code
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     """Command line entry point of the rdd dispatcher.
 
@@ -89,8 +124,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     module_name = SUBCOMMANDS.get(args[0]) if args else None
     if module_name is not None:
-        module = importlib.import_module(module_name)
-        exit_code = module.main(args[1:])
+        exit_code = dispatch(args[0], module_name, args[1:])
     else:
         cmd = RddCmd()
         exit_code = cmd.run(args)
