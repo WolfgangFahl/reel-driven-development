@@ -24,9 +24,12 @@ from starlette.background import BackgroundTask
 from swagger_ui_bundle import swagger_ui_path
 
 from rdd.i18n import LANGUAGES, pick_language
-from rdd.rdd_site import Reel, ReelSite, Review
+from rdd.rdd_site import Reel, ReelSite, Review, Reviews
 
 TARPIT_SECONDS = 0.5
+# per the Review cookie decision the browser remembers a token as a cookie
+# of its own, so it may hold one per review
+COOKIE_PREFIX = "review-"
 
 
 class RateLimit:
@@ -101,6 +104,40 @@ def remember_lang(request: Request, response: HTMLResponse) -> HTMLResponse:
     query_lang = request.query_params.get("lang")
     if query_lang in LANGUAGES:
         response.set_cookie("lang", query_lang)
+    return response
+
+
+def remember_right(
+    request: Request, response: HTMLResponse, reviews: List[Review]
+) -> HTMLResponse:
+    """Remember the tokens that arrived by url in the browser.
+
+    Per the Review cookie decision once the door is open the key can be
+    left out: each token gets a cookie of its own for the days its review
+    names, renewed on every visit with the token.
+
+    Args:
+        request: the request the tokens arrived with.
+        response: the response to carry the cookies.
+        reviews: the reviews whose tokens arrived by url.
+
+    Returns:
+        the response.
+    """
+    secure = (
+        request.url.scheme == "https"
+        or request.headers.get("x-forwarded-proto") == "https"
+    )
+    for review in reviews:
+        response.set_cookie(
+            f"{COOKIE_PREFIX}{review.token}",
+            "1",
+            max_age=review.days * 24 * 3600,
+            path="/",
+            httponly=True,
+            secure=secure,
+            samesite="lax",
+        )
     return response
 
 
@@ -182,38 +219,58 @@ class ReelApp:
             response.headers["Retry-After"] = str(int(self.rate_limit.window_seconds))
         return response
 
-    def address_parts(
-        self, address: str
-    ) -> Tuple[Optional[Review], Optional[Reel], List[str]]:
-        """Resolve an address below /reels/ into right, reel and rest.
+    def right_of(
+        self, request: Request, address: str
+    ) -> Tuple[Optional[Review], List[str], List[Review]]:
+        """The right of the given request and the address parts.
+
+        Per the Review cookie decision the token is given as
+        /reels/<token>/... or as ?token=<token>, and a browser holds the
+        tokens it remembers; the right is what all of them grant.
 
         Args:
+            request: the request.
             address: the path after /reels/, optionally token first.
 
         Returns:
-            the review right or None, the reel or None, and the
-            remaining path parts.
+            the joined review right or None, the address parts with the
+            path token stripped, and the reviews whose token arrived by
+            url - the ones the browser is to remember.
         """
         parts = [urllib.parse.unquote(part) for part in address.split("/")]
-        review = self.site.reviews.by_token().get(parts[0])
-        if review is not None:
+        lookup = self.site.reviews.by_token()
+        url_tokens: List[str] = []
+        if parts and parts[0] in lookup:
+            url_tokens.append(parts[0])
             parts = parts[1:]
-        reel, file_parts = self.site.resolve_reel(parts)
-        return review, reel, file_parts
+        query_token = request.query_params.get("token")
+        if query_token:
+            url_tokens.append(query_token)
+        cookie_tokens = [
+            name[len(COOKIE_PREFIX) :]
+            for name in request.cookies
+            if name.startswith(COOKIE_PREFIX)
+        ]
+        url_reviews = self.site.reviews.by_tokens(url_tokens)
+        reviews = url_reviews + self.site.reviews.by_tokens(cookie_tokens)
+        review = Reviews.union(reviews)
+        return review, parts, url_reviews
 
     def checked_reel(
-        self, address: str
+        self, request: Request, address: str
     ) -> Tuple[Optional[Reel], Optional[Review], List[str]]:
         """The reel of the given address where the right allows it.
 
         Args:
+            request: the request carrying the right.
             address: the path after /reels/, optionally token first.
 
         Returns:
             reel, review and remaining parts; reel is None where the
             address resolves to nothing the right allows.
         """
-        review, reel, file_parts = self.address_parts(address)
+        review, parts, _url_reviews = self.right_of(request, address)
+        reel, file_parts = self.site.resolve_reel(parts)
         if reel is not None and not self.site.allowed(reel, review):
             reel = None
         return reel, review, file_parts
@@ -232,9 +289,12 @@ class ReelApp:
 
         @app.get("/reels", response_class=HTMLResponse, summary="the reels directory")
         def reels(request: Request) -> HTMLResponse:
-            """The public reels directory."""
+            """The reels directory as the holder of the right sees it."""
             lang = lang_of(request)
-            return remember_lang(request, page_response(site.reels(lang=lang)))
+            review, _parts, url_reviews = self.right_of(request, "")
+            response = page_response(site.reels(review, lang=lang))
+            remember_right(request, response, url_reviews)
+            return remember_lang(request, response)
 
         @app.get("/about", response_class=HTMLResponse, summary="the about page")
         def about(request: Request) -> HTMLResponse:
@@ -259,7 +319,7 @@ class ReelApp:
         )
         def api_files(address: str, request: Request):
             """The sorted file names of the reel - the review page's read api."""
-            reel, _review, file_parts = self.checked_reel(address)
+            reel, _review, file_parts = self.checked_reel(request, address)
             if reel is None or file_parts:
                 return self.not_found(request, tarpit=True)
             return JSONResponse(site.reel_files(reel))
@@ -270,7 +330,7 @@ class ReelApp:
         )
         def api_info(address: str, request: Request):
             """Folder and acronym of the reel."""
-            reel, _review, file_parts = self.checked_reel(address)
+            reel, _review, file_parts = self.checked_reel(request, address)
             if reel is None or file_parts:
                 return self.not_found(request, tarpit=True)
             return JSONResponse({"folder": reel.folder, "acronym": reel.acronym})
@@ -281,7 +341,7 @@ class ReelApp:
         )
         def api_reel(address: str, request: Request):
             """The hop set parsed by the model - the page never parses YAML."""
-            reel, _review, file_parts = self.checked_reel(address)
+            reel, _review, file_parts = self.checked_reel(request, address)
             if reel is None or file_parts:
                 return self.not_found(request, tarpit=True)
             return JSONResponse(reel.hop_set.to_dict() if reel.hop_set else {})
@@ -293,7 +353,7 @@ class ReelApp:
         def api_zip(address: str, request: Request):
             """The reel folder zipped - the verdict page's download per the
             Reel verdict decision."""
-            reel, _review, file_parts = self.checked_reel(address)
+            reel, _review, file_parts = self.checked_reel(request, address)
             if reel is None or file_parts:
                 return self.not_found(request, tarpit=True)
             zip_path = site.reel_zip(reel)
@@ -312,7 +372,7 @@ class ReelApp:
             """Per the Reel Review decision a save on this site answers success
             and stores nothing; the request must name an allowed reel, so the
             write api reveals no more than the read api."""
-            reel, _review, file_parts = self.checked_reel(address)
+            reel, _review, file_parts = self.checked_reel(request, address)
             if (
                 reel is None
                 or file_parts
@@ -330,21 +390,18 @@ class ReelApp:
         def reel_route(rest: str, request: Request):
             """Delivery per the Delivery and Hop url decisions.
 
-            The url is /reels/[token/][yyyy/mm/]acronym/[file|review|hop-slug].
-            A bare token answers the reels directory of its review.
+            The url is /reels/[token/][yyyy/mm/]acronym/[file|review|hop-slug],
+            optionally carrying ?token=. A bare token answers the reels
+            directory of its review. Per the Review cookie decision a
+            token that arrived by url is remembered by the browser.
             """
             path = request.url.path
             lang = lang_of(request)
-            parts = [urllib.parse.unquote(part) for part in rest.split("/")]
-            review = site.reviews.by_token().get(parts[0])
-            if review is not None:
-                parts = parts[1:]
-                if not parts or parts == [""]:
-                    return remember_lang(
-                        request, page_response(site.reels(review, lang=lang))
-                    )
-            elif not rest or rest == "":
-                return remember_lang(request, page_response(site.reels(lang=lang)))
+            review, parts, url_reviews = self.right_of(request, rest)
+            if not parts or parts == [""]:
+                response = page_response(site.reels(review, lang=lang))
+                remember_right(request, response, url_reviews)
+                return remember_lang(request, response)
             reel, file_parts = site.resolve_reel(parts)
             if reel is None or not site.allowed(reel, review):
                 return self.not_found(request, tarpit=True)
@@ -353,11 +410,16 @@ class ReelApp:
                     # the reel page needs its trailing slash so its relative
                     # review and file links resolve below the reel
                     return RedirectResponse(path + "/", status_code=301)
-                return remember_lang(request, page_response(site.reel_page(reel, lang)))
-            if file_parts in (["review"], ["reelreview.html"], ["verdict"]):
-                return remember_lang(request, page_response(site.review_page(lang)))
-            if len(file_parts) == 1 and file_parts[0] in reel.hop_slugs():
-                return remember_lang(request, page_response(site.review_page(lang)))
+                response = page_response(site.reel_page(reel, lang))
+            elif file_parts in (["review"], ["reelreview.html"], ["verdict"]):
+                response = page_response(site.review_page(lang))
+            elif len(file_parts) == 1 and file_parts[0] in reel.hop_slugs():
+                response = page_response(site.review_page(lang))
+            else:
+                response = None
+            if response is not None:
+                remember_right(request, response, url_reviews)
+                return remember_lang(request, response)
             file_path = os.path.realpath(os.path.join(reel.path, *file_parts))
             reel_dir = os.path.realpath(reel.path)
             if not file_path.startswith(reel_dir + os.sep) or not os.path.isfile(

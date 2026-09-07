@@ -134,6 +134,7 @@ class Mint:
         person: str,
         meeting: str = "",
         reels: Optional[List[str]] = None,
+        days: int = Review.DEFAULT_DAYS,
     ) -> str:
         """Mint a review token for the given person.
 
@@ -141,6 +142,7 @@ class Mint:
             person: the person the link is for.
             meeting: the meeting the review belongs to.
             reels: the acronyms the review grants.
+            days: the days a browser remembers the token.
 
         Returns:
             the review link.
@@ -159,6 +161,7 @@ class Mint:
             person=person,
             meeting=meeting,
             reels=list(reels or []),
+            days=days,
         )
         reviews.reviews.append(review)
         self.save_reviews(reviews)

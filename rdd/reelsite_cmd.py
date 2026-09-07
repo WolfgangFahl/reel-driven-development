@@ -14,7 +14,7 @@ from typing import List, Optional
 from basemkit.base_cmd import BaseCmd
 
 from rdd.mint import Mint
-from rdd.rdd_site import RddSiteConfig, Reviews, serve
+from rdd.rdd_site import RddSiteConfig, Review, Reviews, serve
 from rdd.version import Version
 
 
@@ -63,6 +63,12 @@ class ReelSiteCmd(BaseCmd):
             metavar="ACRONYM",
             help="the reels a minted review grants",
         )
+        parser.add_argument(
+            "--days",
+            type=int,
+            default=Review.DEFAULT_DAYS,
+            help="the days a browser remembers a minted review's token [default: %(default)s]",
+        )
 
     def handle_args(self, args: argparse.Namespace) -> bool:
         """Handle the parsed arguments - init, mint or serve.
@@ -84,7 +90,7 @@ class ReelSiteCmd(BaseCmd):
             handled = True
         elif args.mint:
             mint = Mint(config)
-            url = mint.mint_review(args.mint, args.meeting, args.reels)
+            url = mint.mint_review(args.mint, args.meeting, args.reels, args.days)
             print(url)
             handled = True
         elif args.serve:

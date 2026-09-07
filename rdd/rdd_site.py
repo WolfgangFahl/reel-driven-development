@@ -141,11 +141,15 @@ class Review:
     """
 
     WILDCARD = "*"
+    DEFAULT_DAYS = 30
 
     token: str = ""
     person: str = ""
     meeting: str = ""
     reels: List[str] = field(default_factory=list)
+    # per the Review cookie decision the browser remembers the token for
+    # the period set for the review
+    days: int = DEFAULT_DAYS
 
     @property
     def is_wildcard(self) -> bool:
@@ -187,6 +191,49 @@ class Reviews:
         """
         lookup = {review.token: review for review in self.reviews}
         return lookup
+
+    def by_tokens(self, tokens: List[str]) -> List[Review]:
+        """The reviews the given tokens name, unknown tokens skipped.
+
+        Args:
+            tokens: the tokens.
+
+        Returns:
+            the reviews in the order of the tokens.
+        """
+        lookup = self.by_token()
+        reviews = [lookup[token] for token in tokens if token in lookup]
+        return reviews
+
+    @staticmethod
+    def union(reviews: List[Review]) -> Optional[Review]:
+        """The one right the given reviews grant together.
+
+        Per the Review cookie decision a browser may hold several tokens;
+        the right is what all of them grant. The token of the first review
+        is kept so a right that came by url keeps its token in the links;
+        an empty token stands for a right the browser remembers.
+
+        Args:
+            reviews: the reviews.
+
+        Returns:
+            the joined review; None where there is no review.
+        """
+        joined = None
+        if reviews:
+            reels: List[str] = []
+            for review in reviews:
+                reels.extend(reel for reel in review.reels if reel not in reels)
+            first = reviews[0]
+            joined = Review(
+                token=first.token,
+                person=first.person,
+                meeting=first.meeting,
+                reels=reels,
+                days=first.days,
+            )
+        return joined
 
 
 @dataclass
@@ -293,7 +340,7 @@ class ReelSite:
             the url of the reel.
         """
         prefix = self.config.reels_url_prefix
-        if review:
+        if review and review.token:
             prefix = f"{prefix}{review.token}/"
         url = f"{prefix}{reel.acronym}/"
         return url

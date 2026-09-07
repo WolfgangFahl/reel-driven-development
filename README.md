@@ -76,7 +76,7 @@ one name - the name of what we do:
 | `rdd detect` | `hopdetect` | find the hops of a reel and capture the evidence frames |
 | `rdd doc` | `reeldoc` | generate the reel document from a Recording |
 | `rdd review` | `reelreview` | serve one reel folder for review |
-| `rdd site` | `reelsite` | serve the reel site; `--init` initializes it, `--mint` mints a review token |
+| `rdd site` | `reelsite` | serve the reel site; `--init` initializes it, `--mint` mints a review token that a browser remembers for `--days` (default 30) |
 
 `rdd` without a subcommand lists them; the tool names stay available as
 entry points of their own.

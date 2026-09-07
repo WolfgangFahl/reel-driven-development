@@ -64,13 +64,17 @@ class TestMint(Basetest):
             self.mint.mint_review("maria")
         self.mint.init_site("wf", "Wolfgang Fahl", "wf@bitplan.com", "")
         url = self.mint.mint_review(
-            "maria", meeting="CompGen/Usability 2026-07-12", reels=["NVK-2026-07-12"]
+            "maria",
+            meeting="CompGen/Usability 2026-07-12",
+            reels=["NVK-2026-07-12"],
+            days=7,
         )
         reviews = Reviews.of_path(self.mint.reviews_path)
         self.assertEqual(2, len(reviews.reviews))
         minted = reviews.reviews[1]
         self.assertEqual("maria", minted.person)
         self.assertEqual(["NVK-2026-07-12"], minted.reels)
+        self.assertEqual(7, minted.days)
         self.assertIn(minted.token, url)
 
     def testWildcardRight(self):

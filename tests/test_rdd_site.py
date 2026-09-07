@@ -172,13 +172,17 @@ class TestReelDelivery(Basetest):
         Basetest.tearDown(self)
 
     def get(
-        self, path: str, range_header: Optional[str] = None
+        self,
+        path: str,
+        range_header: Optional[str] = None,
+        cookie: Optional[str] = None,
     ) -> Tuple[int, bytes, dict]:
         """Get the given path from the test server.
 
         Args:
             path: the path to request.
             range_header: the Range header value, if any.
+            cookie: the Cookie header value, if any.
 
         Returns:
             status code, body and headers of the response.
@@ -186,6 +190,8 @@ class TestReelDelivery(Basetest):
         request = urllib.request.Request(f"{self.base_url}{path}")
         if range_header:
             request.add_header("Range", range_header)
+        if cookie:
+            request.add_header("Cookie", cookie)
         try:
             with urllib.request.urlopen(request) as response:
                 headers = {
@@ -320,6 +326,45 @@ class TestReelDelivery(Basetest):
         with open(reel_yaml_path, "rb") as reel_yaml_file:
             after = reel_yaml_file.read()
         self.assertEqual(before, after)
+
+    def testReviewCookie(self):
+        """Test the Review cookie decision - once the door is open the key
+        can be left out: a token that arrived by url is remembered for the
+        days of its review, and the persistent urls open with the cookie."""
+        cookie_name = f"review-{self.TOKEN}"
+        # the key in the path
+        status, _body, headers = self.get(f"/reels/{self.TOKEN}/secret-reel/")
+        self.assertEqual(200, status)
+        set_cookie = headers["set-cookie"]
+        self.assertIn(f"{cookie_name}=1", set_cookie)
+        self.assertIn(f"Max-Age={30 * 24 * 3600}", set_cookie)
+        self.assertIn("HttpOnly", set_cookie)
+        self.assertIn("SameSite=lax", set_cookie)
+        # the key as ?token=
+        status, _body, headers = self.get(f"/reels/secret-reel/?token={self.TOKEN}")
+        self.assertEqual(200, status)
+        self.assertIn(f"{cookie_name}=1", headers["set-cookie"])
+        # the door is open: the persistent urls work without the key
+        cookie = f"{cookie_name}=1"
+        status, body, _headers = self.get("/reels/secret-reel/", cookie=cookie)
+        self.assertEqual(200, status)
+        self.assertNotIn(self.TOKEN.encode(), body)
+        status, body, _headers = self.get("/reels/secret-reel/reel.yaml", cookie=cookie)
+        self.assertEqual(200, status)
+        status, body, _headers = self.get("/reels/", cookie=cookie)
+        self.assertEqual(200, status)
+        self.assertIn(b"secret-reel", body)
+        status, body, _headers = self.get("/reels", cookie=cookie)
+        self.assertEqual(200, status)
+        self.assertIn(b"secret-reel", body)
+        # a key that was withdrawn opens nothing
+        status, _body, _headers = self.get(
+            "/reels/secret-reel/", cookie="review-withdrawn-token=1"
+        )
+        self.assertEqual(404, status)
+        # no key, no door
+        status, _body, _headers = self.get("/reels/secret-reel/")
+        self.assertEqual(404, status)
 
     def testHopUrl(self):
         """Test the Hop url decision - shortcut and lengthy PID iri
