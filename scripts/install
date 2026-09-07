@@ -1,4 +1,12 @@
 #!/bin/bash
 # WF 2020-03-25
-# workaround ugly 
-pip install ".[all]" -U
+# workaround ugly
+# an optional extra e.g. all installs the detection chain - CI and
+# developers; a review only site installs without one
+extra="$1"
+if [ -n "$extra" ]
+then
+  pip install ".[$extra]" -U
+else
+  pip install . -U
+fi

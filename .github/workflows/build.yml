@@ -32,7 +32,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        scripts/install
+        scripts/install all
         scripts/doc
     - name: Run tests
       run: |
